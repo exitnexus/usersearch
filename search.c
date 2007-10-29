@@ -65,13 +65,10 @@ search_data_t * initUserSearchDump(char * filename, uint32_t max){
 
 	input = fopen(filename, "r");
 
-
-
 	if(!input){
 		printf("Failed to open file %s\n", filename);
 		exit(1);
 	}
-
 
 //count the number of lines
 	while(fgets(buf, 255, input))
@@ -84,8 +81,8 @@ search_data_t * initUserSearchDump(char * filename, uint32_t max){
 
 //initialize the data struct
 	data = initUserSearch(count);
+	
 
-//*
 //read the file into the struct.
 	i = 0;
 	
@@ -121,7 +118,7 @@ search_data_t * initUserSearchDump(char * filename, uint32_t max){
 
 	if(data->size == data->maxid)
 		printf("space is too small to store this file\n");
-//*/
+
 	fclose(input);
 
 	return data;
@@ -161,7 +158,7 @@ char matchUser(search_data_t * data, unsigned int id, search_t * search){
 
 	return 	user->age >= search->agemin && user->age <= search->agemax &&
 			(!search->loc || user->loc == search->loc) &&
-			(!search->sex == 2 || user->sex == search->sex) &&
+			(search->sex == 2 || user->sex == search->sex) &&
 			user->active >= search->active &&
 			user->pic    >= search->pic    &&
 			user->single >= search->single &&
@@ -184,7 +181,7 @@ void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsea
 			if(matchUser(data, i, search)){
 				search->totalrows++;
 
-				if(search->totalrows >= search->offset && search->returnedrows < search->rowcount){
+				if(search->totalrows > search->offset && search->returnedrows < search->rowcount){
 					search->results[search->returnedrows] = data->usermapping[i];
 					search->returnedrows++;
 				}
@@ -206,14 +203,17 @@ void printSearch(search_t * search){
 }
 
 void verbosePrintSearch(search_t * search){
-	printf("Age: %u-%u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u\n",
+	printf("Age: %u-%u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u, Searching: %u-%u\n",
 		search->agemin, search->agemax, 
 		(search->sex == 0 ? "Male" : search->sex == 1 ? "Female" : "Any"), 
 		search->loc, 
 		search->active, 
 		search->pic, 
 		search->single, 
-		search->sexuality);
+		search->sexuality,
+		search->offset,
+		search->offset+search->rowcount
+		);
 	
 	if(search->returnedrows){
 		printf("Results: %u of %u: ", search->returnedrows, search->totalrows);
@@ -234,7 +234,7 @@ void dumpSearchParams(search_t ** searches, unsigned int numsearches){
 
 
 
-search_t ** generateSearch(unsigned int numsearches){
+search_t ** generateSearch(unsigned int numsearches, unsigned int pagesize){
 	search_t ** searches;
 	search_t * search;
 	unsigned int i;
@@ -242,9 +242,7 @@ search_t ** generateSearch(unsigned int numsearches){
 	searches = calloc(numsearches, sizeof(search_t *));
 
 	for(i = 0; i < numsearches; i++){
-		search = malloc(sizeof(search_t));
-
-		search->results = calloc(PAGESIZE, sizeof(uint32_t));
+		search = initSearch(pagesize);
 
 		search->loc = 0;//rand() % 300;
 		search->agemin = 14 + rand() % 50;
@@ -255,7 +253,6 @@ search_t ** generateSearch(unsigned int numsearches){
 		search->single = rand() % 2;
 		search->sexuality = rand() % 4;
 
-		search->rowcount = PAGESIZE;
 		search->offset = 0;
 
 		searches[i] = search;
@@ -264,3 +261,19 @@ search_t ** generateSearch(unsigned int numsearches){
 	return searches;
 }
 
+
+search_t * initSearch(unsigned int pagesize){
+	search_t * search;
+
+	search = calloc(1, sizeof(search_t));
+
+	search->results = calloc(pagesize, sizeof(userid_t));
+	search->rowcount = pagesize;
+
+	return search;
+}
+
+void destroySearch(search_t * search){
+	free(search->results);
+	free(search);
+}

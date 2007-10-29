@@ -112,6 +112,10 @@ typedef struct { //search_t
 	unsigned int totalrows; //total rows matched
 	unsigned int returnedrows; //num rows returned
 	userid_t * results; //array of userids that match
+
+//request
+	struct evhttp_request *req;
+
 } search_t;
 
 
@@ -142,8 +146,10 @@ void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsea
 void printSearch(search_t * search);
 void verbosePrintSearch(search_t * search);
 void dumpSearchParams(search_t ** searches, unsigned int numsearches);
-search_t ** generateSearch(unsigned int numsearches);
+search_t ** generateSearch(unsigned int numsearches, unsigned int pagesize);
 
+search_t * initSearch(unsigned int pagesize);
+void destroySearch(search_t * search);
 
 
 
