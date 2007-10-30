@@ -67,6 +67,10 @@ void handle_queue_response(int fd, short event, void *arg){
 
 	int i;
 
+	char buf[64];
+	read(fd, buf, sizeof(buf));
+
+
 	while(!tq_isempty(response)){
 		search = tq_pop(response);
 
