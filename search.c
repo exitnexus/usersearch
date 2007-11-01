@@ -174,10 +174,11 @@ void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsea
 		searches[searchnum]->returnedrows = 0;
 	}
 
-	for(i = 0; i < data->size; i++){
-		for(searchnum = 0; searchnum < numsearches; searchnum++){
-			search = searches[searchnum];
+	search = searches[0];
+	for(searchnum = 0; searchnum < numsearches; searchnum++){
+		search = searches[searchnum];
 
+		for(i = 0; i < data->size; i++){
 			if(matchUser(data, i, search)){
 				search->totalrows++;
 
