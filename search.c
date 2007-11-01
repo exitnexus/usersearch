@@ -105,8 +105,8 @@ search_data_t * initUserSearchDump(char * filename, uint32_t max){
 		user.loc = loc;
 		user.age = age;
 		user.sex = sex;
-		user.active = active;
-		user.pic = pic;
+		user.active = (active == 2 ? 3 : active);
+		user.pic = (pic == 2 ? 3 : pic);
 		user.single = single;
 		user.sexuality = sexuality;
 
@@ -174,7 +174,6 @@ void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsea
 		searches[searchnum]->returnedrows = 0;
 	}
 
-	search = searches[0];
 	for(searchnum = 0; searchnum < numsearches; searchnum++){
 		search = searches[searchnum];
 
@@ -190,6 +189,163 @@ void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsea
 		}
 	}
 }
+
+
+
+
+
+
+void printbits(const char * prefix, userint_t bits, unsigned int size){
+	int i;
+	
+	printf("%s", prefix);
+	for(i = size*8 - 1; i >= 0; i--)
+		printf("%u", ((bits >> i) & 1));
+	printf("\n");
+}
+
+
+
+void searchUsers2(search_data_t * data, search_t ** searches, unsigned int numsearches){
+	unsigned int i, searchnum;
+	search_t * search;
+	user_t user;
+
+	userint_t userbits, setbits, unsetbits;
+
+
+	for(searchnum = 0; searchnum < numsearches; searchnum++){
+		searches[searchnum]->totalrows = 0;
+		searches[searchnum]->returnedrows = 0;
+	}
+
+
+
+
+
+	for(searchnum = 0; searchnum < numsearches; searchnum++){
+		search = searches[searchnum];
+
+
+//bits to check are 0
+//bits to check are 1
+
+
+#if BIT_PACK_USER_STRUCT
+	//32 bits
+		setbits = 0;
+		unsetbits = 0;
+
+		switch(search->sex){
+			case 0:  unsetbits |= 1 << 7; break; // male,   looking for a 0
+			case 1:    setbits |= 1 << 7; break; // female, looking for a 1
+			case 2:                       break; // either
+		}
+
+		switch(search->active){
+			case 0:                       break; //anything
+			case 1:    setbits |= 1 << 5; break; //active
+			case 2:    setbits |= 3 << 5; break; //online
+		}
+
+		switch(search->pic){
+			case 0:                       break; //anything
+			case 1:    setbits |= 1 << 3; break; //pic
+			case 2:    setbits |= 3 << 3; break; //sign pic
+		}
+
+		switch(search->single){
+			case 0:                       break; //either
+			case 1:    setbits |= 1 << 2; break; //single
+		}
+
+		switch(search->sexuality){
+			case 0:                       break; //any
+			case 1:    setbits |= 1 << 0;        //hetero
+			         unsetbits |= 2 << 0; break;
+			case 2:    setbits |= 2 << 0;        //homo
+			         unsetbits |= 1 << 0; break;
+			case 3:    setbits |= 3 << 0; break; //bi
+		}
+
+#else
+	//64bits
+		setbits = 0;
+		unsetbits = 0;
+
+		switch(search->sex){
+			case 0:  unsetbits |= 1 << (8*4); break; // male,   looking for a 0
+			case 1:    setbits |= 1 << (8*4); break; // female, looking for a 1
+			case 2:                           break; // either
+		}
+
+		switch(search->active){
+			case 0:                           break; //anything
+			case 1:    setbits |= 2 << (8*3); break; //active
+			case 2:    setbits |= 3 << (8*3); break; //online
+		}
+
+		switch(search->pic){
+			case 0:                           break; //anything
+			case 1:    setbits |= 1 << (8*2); break; //pic
+			case 2:    setbits |= 3 << (8*2); break; //sign pic
+		}
+
+		switch(search->single){
+			case 0:                           break; //either
+			case 1:    setbits |= 1 << (8*1); break; //single
+		}
+
+		switch(search->sexuality){
+			case 0:                           break; //any
+			case 1:    setbits |= 1 << (8*0);        //hetero
+			         unsetbits |= 2 << (8*0); break;
+			case 2:    setbits |= 2 << (8*0);        //homo
+			         unsetbits |= 1 << (8*0); break;
+			case 3:    setbits |= 3 << (8*0); break; //bi
+		}
+
+
+#endif
+
+//verbosePrintSearch(search);
+//printf("set: %X, unset: %X\n", setbits, unsetbits);
+//exit(255);
+
+
+		for(i = 0; i < data->size; i++){
+			user = data->userlist[i];
+			userbits = *((userint_t *) & user); //ugly hack to get access to the bits
+
+//printbits("user:  ", userbits, sizeof(userbits));
+//printbits("set:   ", setbits, sizeof(setbits));
+//printbits("unset: ", unsetbits, sizeof(unsetbits));
+			if(
+				(user.age >= search->agemin && user.age <= search->agemax) && 
+				(!search->loc || user.loc == search->loc) &&
+				((userbits & setbits) == setbits) && 
+				((~userbits & unsetbits) == unsetbits)
+				){
+
+//	printf("fail\n\n");
+//else
+//	printf("match\n\n");
+//			continue;
+
+				search->totalrows++;
+	
+				if(search->totalrows > search->offset && search->returnedrows < search->rowcount){
+					search->results[search->returnedrows] = data->usermapping[i];
+					search->returnedrows++;
+				}
+			}
+		}
+	}
+	
+//exit(255);
+}
+
+
 
 
 void printSearch(search_t * search){
