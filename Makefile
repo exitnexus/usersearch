@@ -5,7 +5,7 @@
 ###
 # Local Settings
 ###
-CC			= gcc
+CC			= g++
 CFLAGS		= -Wall -fno-strict-aliasing -I/usr/local/include -L/usr/local/lib -Ilibevent -Ilibevent/compat
 
 DAEMON		= usersearch
@@ -44,7 +44,13 @@ libevent/% :
 $(DAEMON): $(DAEMON_O) $(DAEMON_INC) $(DAEMON).c
 	$(CC) $(LDFLAGS) $(CFLAGS) $(DAEMON_L) $(DAEMON_O) $(DAEMON_INC) $(DAEMON).c -o $(DAEMON)
 
-clean:
-	rm -f *.o libevent/*.o $(DAEMON)
+pristine: clean
 	cd libevent; make clean
+
+clean:
+	rm -f $(DAEMON).tar.gz
+	rm -f *.o $(DAEMON)
 #	rm -f *~
+
+tar: pristine
+	tar zcf $(DAEMON).tar.gz --exclude=search.txt --exclude=.svn *
