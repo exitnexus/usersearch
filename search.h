@@ -141,7 +141,7 @@ void dumpSearchData(search_data_t * data, int max);
 search_data_t * initUserSearch(unsigned int maxentries);
 search_data_t * initUserSearchDump(char * filename, uint32_t max);
 search_data_t * initUserSearchRand(uint32_t count);
-char matchUser(search_data_t * data, unsigned int id, search_t * search);
+inline char matchUser(const search_data_t * data, const unsigned int id, const search_t * search);
 void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsearches);
 void printSearch(search_t * search);
 void verbosePrintSearch(search_t * search);

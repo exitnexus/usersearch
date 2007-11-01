@@ -43,7 +43,7 @@ void * searchRunner(thread_data_t * threaddata){
 	search_t * search;
 
 	while(threaddata->state){
-		search = tq_pop(threaddata->request);
+		search = (search_t *)tq_pop(threaddata->request);
 
 		if(!search)
 			break;
@@ -60,19 +60,19 @@ void * searchRunner(thread_data_t * threaddata){
 
 
 void handle_queue_response(int fd, short event, void *arg){
-	tq_queue_t * response = arg;
+	tq_queue_t * response = (tq_queue_t *)arg;
 	search_t * search;
 
 	struct evbuffer *evb;
 
-	int i;
+	unsigned int i;
 
 	char buf[64];
 	read(fd, buf, sizeof(buf));
 
 
 	while(!tq_isempty(response)){
-		search = tq_pop(response);
+		search = (search_t *)tq_pop(response);
 
 		if(!search)
 			continue;
@@ -93,7 +93,7 @@ void handle_queue_response(int fd, short event, void *arg){
 }
 
 void handle_search_request(struct evhttp_request *req, void *arg){
-	tq_queue_t * request = arg;
+	tq_queue_t * request = (tq_queue_t *)arg;
 
 	search_t * search;
 
@@ -157,7 +157,7 @@ void handle_search_request(struct evhttp_request *req, void *arg){
 }
 
 void handle_search_update(struct evhttp_request *req, void *arg){
-	tq_queue_t * updates = arg;
+//	tq_queue_t * updates = (tq_queue_t *)arg;
 }
 
 void handle_stats(struct evhttp_request *req, void *arg){
@@ -204,7 +204,7 @@ void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int n
 	printf("Generating %u searches\n", numsearches);
 
 	struct timeval start, finish;
-	int i, found, returned;
+	unsigned int i, found, returned;
 	search_t ** searches;
 	search_t * search;
 
@@ -224,7 +224,7 @@ void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int n
 	found = returned = 0;
 
 	for(i = 0; i < numsearches; i++){
-		search = tq_pop(response);
+		search = (search_t *)tq_pop(response);
 //		verbosePrintSearch(search);
 
 		found    += search->totalrows;
@@ -239,12 +239,12 @@ void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int n
 }
 
 int main(int argc, char **argv){
-	uint32_t i;
+	unsigned int i;
 	char * ptr;
 
-	int numthreads;
-	int benchruns;
-	int port;
+	unsigned int numthreads;
+	unsigned int benchruns;
+	unsigned int port;
 
 //main search data
 	search_data_t * data;
@@ -289,7 +289,7 @@ int main(int argc, char **argv){
 
 
 //Parse command line options
-	for (i = 1; i < argc; i++) {
+	for (i = 1; i < (unsigned int)argc; i++) {
 		ptr = argv[i];
 		if(strcmp(ptr, "--help") == 0){
 			printf("Usage:\n"
@@ -310,7 +310,7 @@ int main(int argc, char **argv){
 			bench_arg = ptr = argv[++i];
 	}
 
-	
+
 	numthreads = atoi(threads_arg);
 	if(numthreads < 1)
 		numthreads = 1;
@@ -355,7 +355,7 @@ int main(int argc, char **argv){
 		threaddata[i].response = response;
 		threaddata[i].data = data;
 
-		pthread_create(&thread[i], NULL, (void*) searchRunner, (void*) &threaddata[i]);
+		pthread_create(&thread[i], NULL, (void* (*)(void*)) searchRunner, (void*) &threaddata[i]);
 	}
 
 

@@ -19,7 +19,7 @@ void verbosePrintUser(userid_t userid, user_t * user){
 }
 
 
-void dumpSearchData(search_data_t * data, int max){
+void dumpSearchData(search_data_t * data, unsigned int max){
 	unsigned int i;
 
 	printf("Dumping %u of %u users\n", (max && max < data->size ? max : data->size), data->size);
@@ -32,12 +32,12 @@ void dumpSearchData(search_data_t * data, int max){
 search_data_t * initUserSearch(unsigned int maxentries){
 	printf("Initializing with space for %u users\n", maxentries);
 
-	search_data_t * data = malloc(sizeof(search_data_t));
+	search_data_t * data = (search_data_t *)malloc(sizeof(search_data_t));
 
 	data->maxid = maxentries;
 	data->size = 0;
-	data->usermapping = calloc(maxentries, sizeof(userid_t));
-	data->userlist = calloc(maxentries, sizeof(user_t));
+	data->usermapping = (userid_t *)calloc(maxentries, sizeof(userid_t));
+	data->userlist = (user_t *)calloc(maxentries, sizeof(user_t));
 
 	return data;
 }
@@ -153,7 +153,7 @@ search_data_t * initUserSearchRand(uint32_t count){
 
 
 
-char matchUser(search_data_t * data, unsigned int id, search_t * search){
+inline char matchUser(const search_data_t * data, const unsigned int id, const search_t * search){
 	user_t * user = & data->userlist[id];
 
 	return 	user->age >= search->agemin && user->age <= search->agemax &&
@@ -239,7 +239,7 @@ search_t ** generateSearch(unsigned int numsearches, unsigned int pagesize){
 	search_t * search;
 	unsigned int i;
 
-	searches = calloc(numsearches, sizeof(search_t *));
+	searches = (search_t **)calloc(numsearches, sizeof(search_t *));
 
 	for(i = 0; i < numsearches; i++){
 		search = initSearch(pagesize);
@@ -265,9 +265,9 @@ search_t ** generateSearch(unsigned int numsearches, unsigned int pagesize){
 search_t * initSearch(unsigned int pagesize){
 	search_t * search;
 
-	search = calloc(1, sizeof(search_t));
+	search = (search_t *)calloc(1, sizeof(search_t));
 
-	search->results = calloc(pagesize, sizeof(userid_t));
+	search->results = (userid_t*)calloc(pagesize, sizeof(userid_t));
 	search->rowcount = pagesize;
 
 	return search;

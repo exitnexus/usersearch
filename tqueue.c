@@ -38,7 +38,7 @@ tq_queue_t *tq_init(int type) {
 			queue->size = _TQ_INIT_NODES;
 			break;
 	}
-	queue->node = calloc(queue->size, sizeof(tq_node_t *));
+	queue->node = (tq_node_t **)calloc(queue->size, sizeof(tq_node_t *));
 	queue->count = 0;
 	pthread_mutex_init(&queue->lock, NULL);
 	pthread_cond_init (&queue->cv, NULL);
@@ -152,7 +152,7 @@ int tq_push(tq_queue_t *queue, short prio, void *data) {
 	 **/
 	if (queue->type == TQ_HEAP && queue->count+1 > queue->size) {
 		queue->size += _TQ_REALLOC_NODES;
-		queue->node = realloc(queue->node, sizeof(tq_node_t) * queue->size);
+		queue->node = (tq_node_t **)realloc(queue->node, sizeof(tq_node_t) * queue->size);
 		if (queue->node == NULL)
 			return -1;	// Unable to allocate more nodes
 	}
@@ -209,7 +209,7 @@ int tq_clean(tq_queue_t *queue){
 		if (queue->size - (queue->count + _TQ_REALLOC_NODES) > 1) {
 			s = queue->size - (queue->count + _TQ_REALLOC_NODES);
 			queue->size = queue->count + _TQ_REALLOC_NODES;
-			queue->node = realloc(queue->node, sizeof(tq_node_t) * queue->size);
+			queue->node = (tq_node_t **)realloc(queue->node, sizeof(tq_node_t) * queue->size);
 			if (queue->node == NULL) {
 				pthread_mutex_unlock(&queue->lock);
 				return -1;
