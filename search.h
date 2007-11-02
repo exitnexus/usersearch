@@ -137,7 +137,7 @@ typedef struct {
 
 void printUser(userid_t userid, user_t * user);
 void verbosePrintUser(userid_t userid, user_t * user);
-void dumpSearchData(search_data_t * data, int max);
+void dumpSearchData(search_data_t * data, unsigned int max);
 search_data_t * initUserSearch(unsigned int maxentries);
 search_data_t * initUserSearchDump(char * filename, uint32_t max);
 search_data_t * initUserSearchRand(uint32_t count);

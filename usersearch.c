@@ -151,7 +151,7 @@ void handle_search_request(struct evhttp_request *req, void *arg){
 	if(ptr)	search->offset = atoi(ptr);
 
 
-	verbosePrintSearch(search);
+//	verbosePrintSearch(search);
 
 	tq_push(request, 0, (void * ) search);
 }
@@ -370,10 +370,12 @@ int main(int argc, char **argv){
 	event_init();
 
 
+	printf("Listening on %s:%s\n", hostname_arg, port_arg);
+
 //start the http server
 	http = evhttp_start(hostname_arg, atoi(port_arg));
 	if(http == NULL) {
-		printf("Couldn't start serve on %u\n", atoi(port_arg));
+		printf("Couldn't start server on %s\n", port_arg);
 		return 1;
 	}
 
