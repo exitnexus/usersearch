@@ -3,48 +3,101 @@
 #include <stdlib.h>
 #include <string.h>
 
-
+#include <vector>
 #include "search.h"
 
 
+search_data::search_data(){
+	pthread_rwlock_init(&rwlock, NULL);
+}
 
-void printUser(userid_t userid, user_t * user){
+void search_data::printUser(userid_t userid){
+	user_t * user = & userlist[useridmap[userid]];
+	printUser(userid, user);
+}
+
+void search_data::printUser(userid_t userid, user_t * user){
 	printf("%u,%u,%s,%u,%u,%u,%u,%u\n",
 		userid, user->age, (user->sex ? "Female" : "Male"), user->loc, user->active, user->pic, user->single, user->sexuality);
 }
 
-void verbosePrintUser(userid_t userid, user_t * user){
+void search_data::verbosePrintUser(userid_t userid){
+	user_t * user = & userlist[useridmap[userid]];
+	verbosePrintUser(userid, user);
+}
+
+void search_data::verbosePrintUser(userid_t userid, user_t * user){
 	printf("Userid: %u, Age: %u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u\n",
 		userid, user->age, (user->sex ? "Female" : "Male"), user->loc, user->active, user->pic, user->single, user->sexuality);
 }
 
 
-void dumpSearchData(search_data_t * data, unsigned int max){
-	unsigned int i;
+void search_data::dumpSearchData(unsigned int max){
+	unsigned int i, size;
 
-	printf("Dumping %u of %u users\n", (max && max < data->size ? max : data->size), data->size);
+	size = userlist.size();
+	max = (max && max < size ? max : size);
 
-	for(i = 0; i < data->size && (max == 0 || i < max); i++)
-		printUser(data->usermapping[i], & data->userlist[i]);
+	printf("Dumping %u of %u users\n", max, size);
+
+	for(i = 0; i < max; i++)
+		printUser(usermap[i], & userlist[i]);
 }
 
 
-search_data_t * initUserSearch(unsigned int maxentries){
-	printf("Initializing with space for %u users\n", maxentries);
+uint32_t search_data::setUser(const userid_t userid, const user_t user){
+	uint32_t index = 0;
 
-	search_data_t * data = (search_data_t *)malloc(sizeof(search_data_t));
+	if(useridmap.size() > userid && useridmap[userid]){ //already exists, put it there
+		index = useridmap[userid];
+		
+		userlist[index] = user;
+		//assume usermap and useridmap are already correct
+	
+	}else if(deluserlist.size()){ //space exists from a previous user
+		index = deluserlist.back();
+		deluserlist.pop_back();
+	
+		userlist[index] = user;
+		usermap[index] = userid;
 
-	data->maxid = maxentries;
-	data->size = 0;
-	data->usermapping = (userid_t *)calloc(maxentries, sizeof(userid_t));
-	data->userlist = (user_t *)calloc(maxentries, sizeof(user_t));
+		useridmap.reserve(userid+1);
+		useridmap[userid] = index;
 
-	return data;
+	}else{ //make space
+		index = userlist.size();
+
+		assert(userlist.size() == usermap.size());
+
+		userlist.push_back(user);
+		usermap.push_back(userid);
+		
+		useridmap.reserve(userid+1);
+		useridmap[userid] = index;
+	}
+
+	return index;
 }
 
-search_data_t * initUserSearchDump(char * filename, uint32_t max){
+bool search_data::delUser(userid_t userid){
+	uint32_t index = 0;
+	
+	if(useridmap.size() < userid || !useridmap[userid]) //doesn't exist
+		return false;
 
-	search_data_t * data;
+	index = useridmap[userid];
+
+	useridmap[userid] = 0;
+	usermap[index] = 0;
+//	userlist[index] = {0};
+
+	deluserlist.push_back(index);
+
+	return true;
+}
+
+
+void search_data::fillUserSearchDump(char * filename, uint32_t max){
 
 	FILE *input;
 
@@ -61,7 +114,7 @@ search_data_t * initUserSearchDump(char * filename, uint32_t max){
 	unsigned int sexuality;
 
 
-	uint32_t i, count = 0;
+	uint32_t i = 0;
 
 	input = fopen(filename, "r");
 
@@ -69,26 +122,12 @@ search_data_t * initUserSearchDump(char * filename, uint32_t max){
 		printf("Failed to open file %s\n", filename);
 		exit(1);
 	}
-
-//count the number of lines
-	while(fgets(buf, 255, input))
-		count++;
-
-	rewind(input);
-
-	if(max && count > max)
-		count = max;
-
-//initialize the data struct
-	data = initUserSearch(count);
 	
 
 //read the file into the struct.
-	i = 0;
-	
 	fgets(buf, 255, input); //ignore the first line
 
-	while(fgets(buf, 255, input) && data->size < data->maxid){
+	while(fgets(buf, 255, input) && (max == 0 || ++i < max)){
 		// id,userid,age,sex,loc,active,pic,single,sexualit
 		// 56,2080347,19,Female,19,1,1,0,0
 
@@ -110,169 +149,101 @@ search_data_t * initUserSearchDump(char * filename, uint32_t max){
 		user.single = single;
 		user.sexuality = sexuality;
 
-		memcpy(& data->userlist[data->size], & user, sizeof(user_t));
-		data->usermapping[data->size] = userid;
-
-		data->size++;
+		setUser(userid, user);
 	}
-
-	if(data->size == data->maxid)
-		printf("space is too small to store this file\n");
 
 	fclose(input);
 
-	return data;
+//	return data;
 }
 
 
-search_data_t * initUserSearchRand(uint32_t count){
+void search_data::fillRand(uint32_t count){
 	uint32_t i;
-	user_t *user;
-	search_data_t * data;
-
-	data = initUserSearch(count);
+	user_t user;
 
 	for(i = 0; i < count; i++){
-		data->size++;
+		user.loc = 1 + rand() % 300;
+		user.age = 14 + rand() % 50;
+		user.sex = rand() % 2;
+		user.active = rand() % 3;
+		user.pic = rand() % 3;
+		user.single = rand() % 2;
+		user.sexuality = rand() % 4;
 
-		data->usermapping[i] = i+1;
-
-		user = & data->userlist[i];
-
-		user->loc = 1 + rand() % 300;
-		user->age = 14 + rand() % 50;
-		user->sex = rand() % 2;
-		user->active = rand() % 3;
-		user->pic = rand() % 3;
-		user->single = rand() % 2;
-		user->sexuality = rand() % 4;
+		setUser(i+1, user);
 	}
-
-	return data;
 }
 
 
 
-inline char matchUser(const search_data_t * data, const unsigned int id, const search_t * search){
-	user_t * user = & data->userlist[id];
+inline char search_data::matchUser(const unsigned int id, const search * srch){
+	user_t * user = & userlist[id];
 
-	return 	user->age >= search->agemin && user->age <= search->agemax &&
-			(!search->loc || user->loc == search->loc) &&
-			(search->sex == 2 || user->sex == search->sex) &&
-			user->active >= search->active &&
-			user->pic    >= search->pic    &&
-			user->single >= search->single &&
-			(!search->sexuality || user->sexuality == search->sexuality);
+	return 	user->age >= srch->agemin && user->age <= srch->agemax &&
+			(!srch->loc || user->loc == srch->loc) &&
+			(srch->sex == 2 || user->sex == srch->sex) &&
+			user->active >= srch->active &&
+			user->pic    >= srch->pic    &&
+			user->single >= srch->single &&
+			(!srch->sexuality || user->sexuality == srch->sexuality);
 }
 
-void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsearches){
-	unsigned int i, searchnum;
-	search_t * search;
+void search_data::searchUsers(search * srch){
+	unsigned int i;
 
-	for(searchnum = 0; searchnum < numsearches; searchnum++){
-		searches[searchnum]->totalrows = 0;
-		searches[searchnum]->returnedrows = 0;
-	}
+	srch->totalrows = 0;
+	srch->results.reserve(srch->rowcount);
 
-	for(searchnum = 0; searchnum < numsearches; searchnum++){
-		search = searches[searchnum];
+	for(i = 0; i < userlist.size(); i++){
+		if(matchUser(i, srch)){
+			srch->totalrows++;
 
-		for(i = 0; i < data->size; i++){
-			if(matchUser(data, i, search)){
-				search->totalrows++;
-
-				if(search->totalrows > search->offset && search->returnedrows < search->rowcount){
-					search->results[search->returnedrows] = data->usermapping[i];
-					search->returnedrows++;
-				}
-			}
+			if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range
+				srch->results.push_back(usermap[i]); //append the userid to the results
 		}
 	}
 }
 
-void printSearch(search_t * search){
+
+
+
+
+//////////////////////////////////
+////////// class search //////////
+//////////////////////////////////
+
+
+
+void search::print(){
 	printf("%u-%u,%s,%u,%u,%u,%u,%u\n",
-		search->agemin, search->agemax, 
-		(search->sex == 0 ? "Male" : search->sex == 1 ? "Female" : "Any"), 
-		search->loc, 
-		search->active, 
-		search->pic, 
-		search->single, 
-		search->sexuality);
+		agemin, agemax, (sex == 0 ? "Male" : sex == 1 ? "Female" : "Any"), 
+		loc, active, pic, single, sexuality);
 }
 
-void verbosePrintSearch(search_t * search){
+void search::verbosePrint(){
 	printf("Age: %u-%u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u, Searching: %u-%u\n",
-		search->agemin, search->agemax, 
-		(search->sex == 0 ? "Male" : search->sex == 1 ? "Female" : "Any"), 
-		search->loc, 
-		search->active, 
-		search->pic, 
-		search->single, 
-		search->sexuality,
-		search->offset,
-		search->offset+search->rowcount
-		);
-	
-	if(search->returnedrows){
-		printf("Results: %u of %u: ", search->returnedrows, search->totalrows);
-		unsigned int i;
-		for(i = 0; i < search->returnedrows; i++)
-			printf("%u,", search->results[i]);
+		agemin, agemax, (sex == 0 ? "Male" : sex == 1 ? "Female" : "Any"), 
+		loc, active, pic, single, sexuality, offset, offset+rowcount);
+
+	if(results.size()){
+		printf("Results: %u of %u: ", results.size(), totalrows);
+		for(unsigned int i = 0; i < results.size(); i++)
+			printf("%u,", results[i]);
 		printf("\n");
 	}
 }
 
+void search::random(){
+	loc = 0;//rand() % 300;
+	agemin = 14 + rand() % 50;
+	agemax = agemin + rand() % 15;
+	sex = rand() % 3;
+	active = rand() % 3;
+	pic = rand() % 3;
+	single = rand() % 2;
+	sexuality = rand() % 4;
 
-void dumpSearchParams(search_t ** searches, unsigned int numsearches){
-	unsigned int i;
-
-	for(i = 0; i < numsearches; i++)
-		verbosePrintSearch(searches[i]);
+	offset = 0;
 }
 
-
-
-search_t ** generateSearch(unsigned int numsearches, unsigned int pagesize){
-	search_t ** searches;
-	search_t * search;
-	unsigned int i;
-
-	searches = (search_t **)calloc(numsearches, sizeof(search_t *));
-
-	for(i = 0; i < numsearches; i++){
-		search = initSearch(pagesize);
-
-		search->loc = 0;//rand() % 300;
-		search->agemin = 14 + rand() % 50;
-		search->agemax = search->agemin + rand() % 15;
-		search->sex = rand() % 3;
-		search->active = rand() % 3;
-		search->pic = rand() % 3;
-		search->single = rand() % 2;
-		search->sexuality = rand() % 4;
-
-		search->offset = 0;
-
-		searches[i] = search;
-	}
-
-	return searches;
-}
-
-
-search_t * initSearch(unsigned int pagesize){
-	search_t * search;
-
-	search = (search_t *)calloc(1, sizeof(search_t));
-
-	search->results = (userid_t*)calloc(pagesize, sizeof(userid_t));
-	search->rowcount = pagesize;
-
-	return search;
-}
-
-void destroySearch(search_t * search){
-	free(search->results);
-	free(search);
-}

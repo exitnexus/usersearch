@@ -27,7 +27,7 @@ typedef struct {
 	tq_queue_t * updates;
 	tq_queue_t * request;
 	tq_queue_t * response;
-	search_data_t * data;
+	search_data * data;
 } thread_data_t;
 
 
@@ -39,20 +39,18 @@ void signalfd(int fd){
 }
 
 void * searchRunner(thread_data_t * threaddata){
-//	search_t ** searches;
-	search_t * search;
+	search * srch;
 
 	while(threaddata->state){
-		search = (search_t *)tq_pop(threaddata->request);
+		srch = (search *)tq_pop(threaddata->request);
 
-		if(!search)
+		if(!srch)
 			break;
 
-		searchUsers(threaddata->data, & search, 1);
+		threaddata->data->searchUsers(srch);
 
-		tq_push(threaddata->response, 0, (void *) search);
+		tq_push(threaddata->response, 0, (void *) srch);
 		signalfd(threaddata->pushfd);
-		
 	}
 
 	return NULL;
@@ -61,7 +59,7 @@ void * searchRunner(thread_data_t * threaddata){
 
 void handle_queue_response(int fd, short event, void *arg){
 	tq_queue_t * response = (tq_queue_t *)arg;
-	search_t * search;
+	search * srch;
 
 	struct evbuffer *evb;
 
@@ -72,88 +70,65 @@ void handle_queue_response(int fd, short event, void *arg){
 
 
 	while(!tq_isempty(response)){
-		search = (search_t *)tq_pop(response);
+		srch = (search *)tq_pop(response);
 
-		if(!search)
+		if(!srch)
 			continue;
 
 		evb = evbuffer_new();
 
-		evbuffer_add_printf(evb, "Total Rows: %u\n", search->totalrows);
-		evbuffer_add_printf(evb, "Returned Rows: %u\n", search->returnedrows);
-		for(i = 0; i < search->returnedrows; i++)
-			evbuffer_add_printf(evb, "%u,", search->results[i]);
+		evbuffer_add_printf(evb, "Total Rows: %u\n", srch->totalrows);
+		evbuffer_add_printf(evb, "Returned Rows: %u\n", srch->results.size());
+		for(i = 0; i < srch->results.size(); i++)
+			evbuffer_add_printf(evb, "%u,", srch->results[i]);
 		evbuffer_add_printf(evb, "\n");
 
-		evhttp_send_reply(search->req, HTTP_OK, "OK", evb);
+		evhttp_send_reply(srch->req, HTTP_OK, "OK", evb);
 
 		evbuffer_free(evb);
-		destroySearch(search);
+		delete srch;
 	}
 }
 
 void handle_search_request(struct evhttp_request *req, void *arg){
 	tq_queue_t * request = (tq_queue_t *)arg;
 
-	search_t * search;
-
+	search * srch = new search();
 	const char * ptr;
-	int rowcount;
-
 	struct evkeyvalq searchoptions;
+
+
 	evhttp_parse_query(req->uri, &searchoptions);
 
-	rowcount = 25;
 
-	ptr = evhttp_find_header(&searchoptions, "rowcount");
-	if(ptr)	rowcount = atoi(ptr);
+	srch->req = req;
 
-	search = initSearch(rowcount);
+	srch->loc = 0;
+	srch->agemin = 14;
+	srch->agemax = 60;
+	srch->sex = 2;
+	srch->active = 1;
+	srch->pic = 1;
+	srch->single = 0;
+	srch->sexuality = 0;
 
-	search->req = req;
-	search->rowcount = rowcount;
+	srch->offset = 0;
+	srch->rowcount = 25;
 
-	search->loc = 0;
-	search->agemin = 14;
-	search->agemax = 60;
-	search->sex = 2;
-	search->active = 1;
-	search->pic = 1;
-	search->single = 0;
-	search->sexuality = 0;
-	search->offset = 0;
+	if((ptr = evhttp_find_header(&searchoptions, "loc")))       srch->loc       = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "agemin")))    srch->agemin    = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "agemax")))    srch->agemax    = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "sex")))       srch->sex       = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "active")))    srch->active    = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "pic")))       srch->pic       = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "single")))    srch->single    = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) srch->sexuality = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
 
-	ptr = evhttp_find_header(&searchoptions, "loc");
-	if(ptr)	search->loc = atoi(ptr);
+//	search.verbosePrint();
 
-	ptr = evhttp_find_header(&searchoptions, "agemin");
-	if(ptr)	search->agemin = atoi(ptr);
-
-	ptr = evhttp_find_header(&searchoptions, "agemax");
-	if(ptr)	search->agemax = atoi(ptr);
-
-	ptr = evhttp_find_header(&searchoptions, "sex");
-	if(ptr)	search->sex = atoi(ptr);
-
-	ptr = evhttp_find_header(&searchoptions, "active");
-	if(ptr)	search->active = atoi(ptr);
-
-	ptr = evhttp_find_header(&searchoptions, "pic");
-	if(ptr)	search->pic = atoi(ptr);
-
-	ptr = evhttp_find_header(&searchoptions, "single");
-	if(ptr)	search->single = atoi(ptr);
-
-	ptr = evhttp_find_header(&searchoptions, "sexuality");
-	if(ptr)	search->sexuality = atoi(ptr);
-
-	ptr = evhttp_find_header(&searchoptions, "offset");
-	if(ptr)	search->offset = atoi(ptr);
-
-
-//	verbosePrintSearch(search);
-
-	tq_push(request, 0, (void * ) search);
+	tq_push(request, 0, (void * ) & srch);
 }
 
 void handle_search_update(struct evhttp_request *req, void *arg){
@@ -204,18 +179,21 @@ void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int n
 	printf("Generating %u searches\n", numsearches);
 
 	struct timeval start, finish;
-	unsigned int i, found, returned;
-	search_t ** searches;
-	search_t * search;
+	unsigned int i;
+	unsigned int found, returned;
+	unsigned int runtime;
+	search * srch;
 
 	gettimeofday(&start, NULL);
 
 	for(i = 0; i < numsearches; i++){
-		searches = generateSearch(1, 25);
+		srch = new search();
+		srch->rowcount = 25;
+		srch->random();
 
-//		verbosePrintSearch(searches[0]);
+//		srch->verbosePrint();
 
-		tq_push(request, 0, (void * ) searches[0]);
+		tq_push(request, 0, (void * ) srch);
 	}
 
 
@@ -224,18 +202,22 @@ void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int n
 	found = returned = 0;
 
 	for(i = 0; i < numsearches; i++){
-		search = (search_t *)tq_pop(response);
-//		verbosePrintSearch(search);
+		srch = (search *)tq_pop(response);
 
-		found    += search->totalrows;
-		returned += search->returnedrows;
+//		srch->verbosePrint();
+
+		found    += srch->totalrows;
+		returned += srch->results.size();
 	}
 
 	gettimeofday(&finish, NULL);
 
-	printf("found:    %u\n",    (unsigned int) found);
-	printf("returned: %u\n",    (unsigned int) returned);
-	printf("run time: %u ms\n", (unsigned int) ((finish.tv_sec*1000+finish.tv_usec/1000)-(start.tv_sec*1000+start.tv_usec/1000)));
+	runtime = ((finish.tv_sec*1000+finish.tv_usec/1000)-(start.tv_sec*1000+start.tv_usec/1000));
+
+	printf("found:      %u\n",    (unsigned int) found);
+	printf("returned:   %u\n",    (unsigned int) returned);
+	printf("run time:   %u ms\n", (unsigned int) runtime);
+	printf("per search: %.2f ms\n", (float) 1.0*runtime/numsearches);
 }
 
 int main(int argc, char **argv){
@@ -247,7 +229,7 @@ int main(int argc, char **argv){
 	unsigned int port;
 
 //main search data
-	search_data_t * data;
+	search_data * data;
 
 //3 queues
 	tq_queue_t * updates, * request, * response;
@@ -329,11 +311,14 @@ int main(int argc, char **argv){
 
 
 
-	printf("Loading user data\n");
-	data = initUserSearchDump("search.txt", 0);
-//	data = initRand(100000);
+	printf("Loading user data ... ");
+	data = new search_data();
+	data->fillUserSearchDump("search.txt");
+//	data->fillRand(100000);
 
-//	dumpSearchData(data, 10);
+	printf("%u users loaded\n", data->userlist.size());
+
+//	data->dumpSearchData(10);
 
 
 

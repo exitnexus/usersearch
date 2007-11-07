@@ -23,34 +23,42 @@
  *    - single array of users, where the index is the userid
  *      - userids of deleted users take space
  *      - must be in userid order
- *      - adding/deleting users is easy
+ *      - adding/deleting users is O(1)
  *      - very compressed user struct
- *    - single array of users, where the userid is a field
+ *      - scan of users touches ~2.5x memory
+ *    - array of users, where the userid is a field, and an array of userid->index
  *      - no wasted space for deleted users
  *      - can be in any sorted order
- *      - adding/deleting users in sorted order may be hard
+ *      - adding/deleting users in sorted order may be O(n), O(1) in unsorted order
  *      - big user struct (because of userid field)
- *    - array of users and an array of index->userid
+ *      - updating/deleting users needs an extra lookup
+ *      - scan of users touches 2x memory
+ *    - array of users, an array of index->userid, and an array of userid->index
  *      - no wasted space for deleted users
- *      - deleting users is hard, may need to repack the whole working set periodically 
+ *      - deleting users is hard, may need to repack the whole working set periodically
  *      - can be in any sorted order
+ *      - adding/deleting users in sorted order may be O(n), O(1) in unsorted order
  *      - small user struct
- *      - needs an extra lookup, extra complexity
+ *      - needs an extra lookup for update/delete and returning results, extra complexity
+ *      - scan of user touches 1x memory
  *
  *   Organizing Interests:
  *    - included in the user struct, as a bitmap or list
- *    - bitmap of users with each interest
- *    - bitmap of interests for each user
- *    - list of selected interests for each user
+ *    - bitmap of users for each interest
  *    - list of users for each interest
+ *    - bitmap of interests for each user
+ *    - list of interests for each user
  *   
  *   
  * Choices:
- *   - list of users, with index->userid lookup
+ *   - list of users, with index->userid lookup and userid->index list
  *   - each interest has a either a bitmap or a sorted list of users
  *
  ************************/
 
+using namespace std;
+
+#include <vector>
 
 #ifndef _SEARCH_H_
 #define _SEARCH_H_
@@ -58,8 +66,6 @@
 
 typedef uint32_t userid_t;
 
-
-#define PAGESIZE 25
 
 
 #define BIT_PACK_USER_STRUCT 1
@@ -92,8 +98,21 @@ typedef struct {
 #endif
 
 
+typedef struct {
+	
 
-typedef struct { //search_t
+
+
+} interest_t;
+
+
+
+
+
+
+class search {
+public:
+
 //criteria
 	uint16_t loc;
 	unsigned char agemin, agemax;
@@ -109,49 +128,51 @@ typedef struct { //search_t
 	unsigned int offset;   //    starting from row 100
 
 //results
-	unsigned int totalrows; //total rows matched
-	unsigned int returnedrows; //num rows returned
-	userid_t * results; //array of userids that match
+	unsigned int totalrows;    //total rows matched
+	vector<userid_t> results;  //array of userids that match
 
 //request
 	struct evhttp_request *req;
 
-} search_t;
+	void random();
+	void print();
+	void verbosePrint();
+};
 
 
 
-typedef struct {
-	uint32_t size;          //current number of entries
-	uint32_t maxid;         //max number of entries
-	userid_t * usermapping; //offset to userid mapping
-	user_t * userlist;      //list of users
+class search_data {
+public:
+	vector<user_t>     userlist;     //list of user info (age, sex, etc)
+	vector<interest_t> interestlist; //list of interest maps
 
-	// interests, not yet implemented
+	vector<userid_t> deluserlist; //list of user objs that are empty
+	vector<userid_t> usermap;   // user -> userid
+	vector<userid_t> useridmap; // userid -> user
 
-} search_data_t;
+	pthread_rwlock_t rwlock;    //read/write lock
 
+	search_data();
 
+	void fillRand(uint32_t count);
+	void fillUserSearchDump(char * filename, uint32_t max = 0);
 
+	uint32_t setUser(const userid_t userid, const user_t user);
+	bool delUser(userid_t userid);
 
+	void printUser(userid_t userid);
+	void printUser(userid_t userid, user_t * user);
+	void verbosePrintUser(userid_t userid);
+	void verbosePrintUser(userid_t userid, user_t * user);
+	
+	void dumpSearchData(unsigned int max = 0);
 
+	void searchUsers(search * srch);
 
-void printUser(userid_t userid, user_t * user);
-void verbosePrintUser(userid_t userid, user_t * user);
-void dumpSearchData(search_data_t * data, unsigned int max);
-search_data_t * initUserSearch(unsigned int maxentries);
-search_data_t * initUserSearchDump(char * filename, uint32_t max);
-search_data_t * initUserSearchRand(uint32_t count);
-inline char matchUser(const search_data_t * data, const unsigned int id, const search_t * search);
-void searchUsers(search_data_t * data, search_t ** searches, unsigned int numsearches);
-void printSearch(search_t * search);
-void verbosePrintSearch(search_t * search);
-void dumpSearchParams(search_t ** searches, unsigned int numsearches);
-search_t ** generateSearch(unsigned int numsearches, unsigned int pagesize);
+private:
+	inline char matchUser(const unsigned int id, const search * srch);
 
-search_t * initSearch(unsigned int pagesize);
-void destroySearch(search_t * search);
-
-
+};
 
 
 #endif
