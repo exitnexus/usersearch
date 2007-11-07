@@ -89,7 +89,7 @@ bool search_data::delUser(userid_t userid){
 
 	useridmap[userid] = 0;
 	usermap[index] = 0;
-//	userlist[index] = {0};
+	userlist[index] = user_t();
 
 	deluserlist.push_back(index);
 
@@ -177,9 +177,7 @@ void search_data::fillRand(uint32_t count){
 
 
 
-inline char search_data::matchUser(const unsigned int id, const search * srch){
-	user_t * user = & userlist[id];
-
+inline char search_data::matchUser(const user_t * user, const search * srch){
 	return 	user->age >= srch->agemin && user->age <= srch->agemax &&
 			(!srch->loc || user->loc == srch->loc) &&
 			(srch->sex == 2 || user->sex == srch->sex) &&
@@ -196,7 +194,7 @@ void search_data::searchUsers(search * srch){
 	srch->results.reserve(srch->rowcount);
 
 	for(i = 0; i < userlist.size(); i++){
-		if(matchUser(i, srch)){
+		if(matchUser(& userlist[i], srch)){
 			srch->totalrows++;
 
 			if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range

@@ -30,7 +30,7 @@ DATE		= `date +%Y-%m-%d-%H-%M`
 ifdef DEBUG
 	CFLAGS		+= -DUSE_DEBUG -g3 
 else
-	CFLAGS		+= -O2
+	CFLAGS		+= -O3
 endif
 
 all : $(DAEMON)
