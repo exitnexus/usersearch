@@ -1,3 +1,11 @@
+/*********************************
+ * Templated Threaded Queue in C++
+ * 
+ * A threaded queue library for passing work between threads.
+ *
+ ********************************/
+
+
 
 #ifndef _TQUEUE_H_
 #define _TQUEUE_H_
@@ -8,9 +16,9 @@ using std::queue;
 
 template <class T> class tqueue {
 private:
-	queue <T *> q;            // The queue
-	pthread_mutex_t lock;  // The queue lock
-	pthread_cond_t  cv;    // Lock conditional variable
+	queue <T *> q;        // The queue
+	pthread_mutex_t lock; // The queue lock
+	pthread_cond_t  cv;   // Lock conditional variable
 	int             blck; // should pop() block by default
 
 public:
@@ -22,26 +30,26 @@ public:
 
 /**
  * Pop an element off the queue
- * If block is 0, return null if the queue is empty, otherwise wait until an item is placed in the queue
+ * If wait is 0, return null if the queue is empty, otherwise wait until an item is placed in the queue
  * Potentially in the future:
- *  block = -1 => block until an item is placed in the queue, and return it
- *  block = 0  => don't block, return null if the queue is empty
- *  block > 0  => block for <block> seconds  
- */  
-	T * pop(const int thisblock = -1){
+ *  wait = -1 => block until an item is placed in the queue, and return it
+ *  wait = 0  => don't block, return null if the queue is empty
+ *  wait > 0  => block for <block> seconds  
+ */
+	T * pop(const int wait = -1){
 		T * ret;
 		pthread_mutex_lock(&lock);
 
 		/**
 		 * If the queue is empty
 		 *   if we're in non-blocking mode, just return
-		 *	 otherwise wait on the condition to be triggered. The condition gets triggered
-		 *	   either when something is added, in which case the while condition fails and
-		 *	   the value gets returned, or the queue is changed into non-blocking mode and returns
+		 *   otherwise wait on the condition to be triggered. The condition gets triggered
+		 *     either when something is added, in which case the while condition fails and
+		 *     the value gets returned, or the queue is changed into non-blocking mode and returns
 		 **/
 
 		while(q.empty()){
-			if(thisblock == 0 || blck == 0){
+			if(wait == 0 || blck == 0){
 				pthread_mutex_unlock(&lock);
 				return NULL;
 			}
@@ -58,7 +66,7 @@ public:
 		return ret;
 	}
 
-
+//push on the queue
 	void push( T * val ){
 		pthread_mutex_lock(&lock);
 
@@ -82,6 +90,7 @@ public:
 		return ret;
 	}
 
+//set in blocking mode, so a call to pop without args waits until something is added to the queue
 	void block(){
 		pthread_mutex_lock(&lock);
 		blck = 1;
@@ -89,6 +98,8 @@ public:
 		pthread_cond_broadcast(&cv);
 	}
 
+//set in non-blocking mode, so a call to pop returns immediately, returning NULL if the queue is empty
+//also tells all currently blocking pop calls to return immediately
 	void nonblock(){
 		pthread_mutex_lock(&lock);
 		blck = 0;
