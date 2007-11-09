@@ -155,7 +155,9 @@ public:
 	search_data();
 
 	void fillRand(uint32_t count);
-	void fillUserSearchDump(char * filename, uint32_t max = 0);
+	void fillSearchFile(char * filename, uint32_t max = 0);
+	void fillSearchStdin();
+	void fillSearchUrl(char * url);
 
 	uint32_t setUser(const userid_t userid, const user_t user);
 	bool delUser(userid_t userid);
@@ -171,6 +173,7 @@ public:
 
 private:
 	inline char matchUser(const user_t & user, const search & srch);
+	userid_t search_data::parseBuf(char *buf);
 
 };
 

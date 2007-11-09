@@ -4,26 +4,16 @@
 	chdir("/home/nexopia/");
 	require_once("include/general.lib.php");
 
-	$fp = fopen("search.txt", 'w');
-	
 	$res = $usersdb->query("SELECT * FROM usersearch");
 	
 	$str = "";
 	
 	$line = $res->fetchrow();
-	$str .= implode(",", array_keys($line)) . "\n";
-	$str .= implode(",", $line) . "\n";
-	
-	$i = 0;
+	echo implode(",", array_keys($line)) . "\n";
+	echo implode(",", $line) . "\n";
 	
 	while($line = $res->fetchrow()){
-		$str .= implode(",", $line) . "\n";
-
-		if(++$i >= 10000){
-			fwrite($fp, $str);
-			$str = "";
-			$i = 0;
-		}
+		$line['sex'] = ($line['sex'] == 'Male' ? 0 : 1);
+		echo implode(",", $line) . "\n";
 	}
-	fwrite($fp, $str);
-	fclose($fp);
+

@@ -97,11 +97,85 @@ bool search_data::delUser(userid_t userid){
 }
 
 
-void search_data::fillUserSearchDump(char * filename, uint32_t max){
+void search_data::fillSearchFile(char * filename, uint32_t max){
 
 	FILE *input;
-
 	char buf[256];
+	uint32_t i = 0;
+
+	input = fopen(filename, "r");
+
+	if(!input){
+		printf("Failed to open file %s\n", filename);
+		exit(1);
+	}
+	
+//read the file into the struct.
+	fgets(buf, 255, input); //ignore the first line
+
+	while(fgets(buf, 255, input) && (max == 0 || ++i < max)){
+
+		if(!parseBuf(buf)){
+			printf("Bad input file on line %u\n", i);
+			exit(1);
+		}
+	}
+
+	fclose(input);
+
+//	return data;
+}
+
+
+void search_data::fillSearchStdin(){
+	char buf[256];
+	uint32_t i = 0;
+
+//read the file into the struct.
+	fgets(buf, 255, STDIN); //ignore the first line
+
+	while(fgets(buf, 255, STDIN)){
+		i++;
+
+		if(!parseBuf(buf)){
+			printf("Bad input file on line %u\n", i);
+			exit(1);
+		}
+	}
+}
+
+
+void search_data::fillSearchUrl(char * url){
+/*
+	FILE *input;
+	char buf[256];
+	uint32_t i = 0;
+
+	input = fopen(filename, "r");
+
+	if(!input){
+		printf("Failed to open file %s\n", filename);
+		exit(1);
+	}
+	
+//read the file into the struct.
+	fgets(buf, 255, input); //ignore the first line
+
+	while(fgets(buf, 255, input) && (max == 0 || ++i < max)){
+
+		if(!parseBuf(buf)){
+			printf("Bad input file on line %u\n", i);
+			exit(1);
+		}
+	}
+
+	fclose(input);
+
+//	return data;
+*/
+}
+
+userid_t search_data::parseBuf(char *buf){
 	user_t user;
 	unsigned int userid, id;
 
@@ -113,49 +187,27 @@ void search_data::fillUserSearchDump(char * filename, uint32_t max){
 	unsigned int single;
 	unsigned int sexuality;
 
+	// id,userid,age,sex,loc,active,pic,single,sexualit
+	// 56,2080347,19,1,19,1,1,0,0
 
-	uint32_t i = 0;
+//store in temp variables so that they can be full size
+	if(9 != sscanf(buf, "%u,%u,%u,%u,%u,%u,%u,%u,%u", & id, & userid, & age, & sex, & loc, & active, & pic, & single, & sexuality))
+		return 0;
 
-	input = fopen(filename, "r");
+	//ignore id
+	user.age = age;
+	user.sex = sex;
+	user.loc = loc;
+	user.active = active;
+	user.pic = pic;
+	user.single = single;
+	user.sexuality = sexuality;
 
-	if(!input){
-		printf("Failed to open file %s\n", filename);
-		exit(1);
-	}
-	
+	setUser(userid, user);
 
-//read the file into the struct.
-	fgets(buf, 255, input); //ignore the first line
-
-	while(fgets(buf, 255, input) && (max == 0 || ++i < max)){
-		// id,userid,age,sex,loc,active,pic,single,sexualit
-		// 56,2080347,19,Female,19,1,1,0,0
-
-	//store in temp variables so that they can be full size
-		if( 8 == sscanf(buf, "%u,%u,%u,Male,%u,%u,%u,%u,%u",   & id, & userid, & age, & loc, & active, & pic, & single, & sexuality)){
-			sex = 0;
-		}else if(8 == sscanf(buf, "%u,%u,%u,Female,%u,%u,%u,%u,%u", & id, & userid, & age, & loc, & active, & pic, & single, & sexuality)){
-			sex = 1;
-		}else{
-			printf("Bad input file\n");
-			exit(1);
-		}
-
-		user.loc = loc;
-		user.age = age;
-		user.sex = sex;
-		user.active = active;
-		user.pic = pic;
-		user.single = single;
-		user.sexuality = sexuality;
-
-		setUser(userid, user);
-	}
-
-	fclose(input);
-
-//	return data;
+	return userid;
 }
+
 
 
 void search_data::fillRand(uint32_t count){

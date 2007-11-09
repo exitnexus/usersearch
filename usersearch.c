@@ -251,15 +251,17 @@ int main(int argc, char **argv){
 
 	//defaults
 	char port_def[] = "8872";
-	char hostname_def[] = "localhost";
+	char hostname_def[] = "0.0.0.0";
 	char threads_def[] = "3";
 	char bench_def[] = "0";
+	char load_loc_def[] = "-";
 
 	//Argument Pointers
 	char *port_arg = port_def;
 	char *hostname_arg = hostname_def;
 	char *threads_arg = threads_def;
 	char *bench_arg = bench_def;
+	char *load_loc = load_loc_def;
 
 
 //Parse command line options
@@ -268,6 +270,7 @@ int main(int argc, char **argv){
 		if(strcmp(ptr, "--help") == 0){
 			printf("Usage:\n"
 				"\t--help        Show this help\n"
+				"\t-l            Load data from this location (url, filename or - for stdin)\n"
 				"\t-p            Port Number [%s]\n"
 				"\t-h            Hostname [%s]\n"
 				"\t-b            Benchark with number of random searches\n"
@@ -282,6 +285,8 @@ int main(int argc, char **argv){
 			threads_arg = ptr = argv[++i];
 		else if (strcmp(ptr, "-b") == 0)
 			bench_arg = ptr = argv[++i];
+		else if (strcmp(ptr, "-l") == 0)
+			load_loc = ptr = argv[++i];
 	}
 
 
@@ -305,7 +310,13 @@ int main(int argc, char **argv){
 
 	printf("Loading user data ... ");
 	data = new search_data();
-	data->fillUserSearchDump("search.txt");
+	if(load_loc[0] == '-')
+		data->fillSearchStdin();
+	else if(stlen(load_loc) > 7 && strncmp("http://", load_loc, 7) == 0)
+		data->fillSearchUrl(load_loc);
+	else
+		data->fillSearchFile(load_loc);
+	
 //	data->fillRand(100000);
 
 	printf("%u users loaded\n", data->userlist.size());
