@@ -10,7 +10,7 @@
 
 
 #include "search.h"
-#include "tqueue2.h"
+#include "tqueue.h"
 #include "libevent/compat/sys/queue.h"
 #include "libevent/event.h"
 #include "libevent/evhttp.h"
