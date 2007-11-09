@@ -9,7 +9,7 @@ CC			= g++
 CFLAGS		= -Wall -fno-strict-aliasing -I/usr/local/include -L/usr/local/lib -Ilibevent -Ilibevent/compat
 
 DAEMON		= usersearch
-DAEMON_O	= tqueue.o search.o
+DAEMON_O	= search.o
 DAEMON_INC  = \
 	libevent/.libs/buffer.o \
 	libevent/.libs/epoll.o \
@@ -36,12 +36,14 @@ endif
 all : $(DAEMON)
 
 libevent/% : 
+	echo "Compiling libevent ---------------------------------------------------"
 	cd libevent; CFLAGS=$(CFLAGS) ./configure; make
+	echo "Done libevent --------------------------------------------------------"
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(DAEMON): $(DAEMON_O) $(DAEMON_INC) $(DAEMON).c
+$(DAEMON): $(DAEMON_INC) $(DAEMON_O) $(DAEMON).c
 	$(CC) $(LDFLAGS) $(CFLAGS) $(DAEMON_L) $(DAEMON_O) $(DAEMON_INC) $(DAEMON).c -o $(DAEMON)
 
 pristine: clean
@@ -54,3 +56,6 @@ clean:
 
 tar: pristine
 	tar zcf $(DAEMON).tar.gz --exclude=search.txt --exclude=.svn *
+
+ship: tar
+	scp $(DAEMON).tar.gz master:/home/timo/

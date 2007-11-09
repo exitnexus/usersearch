@@ -170,7 +170,7 @@ public:
 	void searchUsers(search * srch);
 
 private:
-	inline char matchUser(const user_t * user, const search * srch);
+	inline char matchUser(const user_t & user, const search & srch);
 
 };
 

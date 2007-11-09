@@ -10,7 +10,7 @@
 
 
 #include "search.h"
-#include "tqueue.h"
+#include "tqueue2.h"
 #include "libevent/compat/sys/queue.h"
 #include "libevent/event.h"
 #include "libevent/evhttp.h"
@@ -24,9 +24,9 @@ typedef struct {
 	unsigned int threadid;
 	char state;
 	int pushfd;
-	tq_queue_t * updates;
-	tq_queue_t * request;
-	tq_queue_t * response;
+	tqueue<search> * updates;
+	tqueue<search> * request;
+	tqueue<search> * response;
 	search_data * data;
 } thread_data_t;
 
@@ -42,14 +42,14 @@ void * searchRunner(thread_data_t * threaddata){
 	search * srch;
 
 	while(threaddata->state){
-		srch = (search *)tq_pop(threaddata->request);
+		srch = threaddata->request->pop();
 
 		if(!srch)
 			break;
 
 		threaddata->data->searchUsers(srch);
 
-		tq_push(threaddata->response, 0, (void *) srch);
+		threaddata->response->push(srch);
 		signalfd(threaddata->pushfd);
 	}
 
@@ -58,7 +58,7 @@ void * searchRunner(thread_data_t * threaddata){
 
 
 void handle_queue_response(int fd, short event, void *arg){
-	tq_queue_t * response = (tq_queue_t *)arg;
+	tqueue<search> * response = (tqueue<search> *)arg;
 	search * srch;
 
 	struct evbuffer *evb;
@@ -68,13 +68,7 @@ void handle_queue_response(int fd, short event, void *arg){
 	char buf[64];
 	read(fd, buf, sizeof(buf));
 
-
-	while(!tq_isempty(response)){
-		srch = (search *)tq_pop(response);
-
-		if(!srch)
-			continue;
-
+	while((srch = response->pop(0))){ //pop a response in non-block mode
 		evb = evbuffer_new();
 
 		evbuffer_add_printf(evb, "Total Rows: %u\n", srch->totalrows);
@@ -91,7 +85,7 @@ void handle_queue_response(int fd, short event, void *arg){
 }
 
 void handle_search_request(struct evhttp_request *req, void *arg){
-	tq_queue_t * request = (tq_queue_t *)arg;
+	tqueue<search> * request = (tqueue<search> *)arg;
 
 	search * srch = new search();
 	const char * ptr;
@@ -114,6 +108,7 @@ void handle_search_request(struct evhttp_request *req, void *arg){
 
 	srch->offset = 0;
 	srch->rowcount = 25;
+	srch->totalrows = 0;
 
 	if((ptr = evhttp_find_header(&searchoptions, "loc")))       srch->loc       = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "agemin")))    srch->agemin    = atoi(ptr);
@@ -126,13 +121,13 @@ void handle_search_request(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
 
-//	search.verbosePrint();
+//	srch.verbosePrint();
 
-	tq_push(request, 0, (void * ) & srch);
+	request->push(srch);
 }
 
 void handle_search_update(struct evhttp_request *req, void *arg){
-//	tq_queue_t * updates = (tq_queue_t *)arg;
+//	tqueue<search> * updates = (tqueue<search> *)arg;
 }
 
 void handle_stats(struct evhttp_request *req, void *arg){
@@ -175,7 +170,7 @@ unsigned int get_now(void){
 }
 
 
-void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int numsearches){
+void benchmarkSearch(tqueue<search> * request, tqueue<search> * response, unsigned int numsearches){
 	printf("Generating %u searches\n", numsearches);
 
 	struct timeval start, finish;
@@ -193,7 +188,7 @@ void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int n
 
 //		srch->verbosePrint();
 
-		tq_push(request, 0, (void * ) srch);
+		request->push(srch);
 	}
 
 
@@ -202,7 +197,7 @@ void benchmarkSearch(tq_queue_t * request, tq_queue_t * response, unsigned int n
 	found = returned = 0;
 
 	for(i = 0; i < numsearches; i++){
-		srch = (search *)tq_pop(response);
+		srch = response->pop();
 
 //		srch->verbosePrint();
 
@@ -232,25 +227,22 @@ int main(int argc, char **argv){
 	search_data * data;
 
 //3 queues
-	tq_queue_t * updates, * request, * response;
+	tqueue<search> * updates  = new tqueue<search>();
+	tqueue<search> * request  = new tqueue<search>();
+	tqueue<search> * response = new tqueue<search>();
 
 //thread stuff
 	pthread_t thread[MAX_THREADS];
 	thread_data_t threaddata[MAX_THREADS];
 
+
 //http server stuff
 	struct evhttp *http;
 	struct event updateEvent;
 
+
 //notification fds
 	int fds[2], pushfd = 0, popfd = 0;
-
-
-//setup the request and response queues
-	updates = tq_init(TQ_FIFO);
-	request = tq_init(TQ_FIFO);
-	response = tq_init(TQ_FIFO);
-//	tq_nonblock(response);
 
 
 	srand(time(NULL));
@@ -338,6 +330,7 @@ int main(int argc, char **argv){
 		threaddata[i].pushfd = pushfd;
 		threaddata[i].request = request;
 		threaddata[i].response = response;
+		threaddata[i].updates = updates;
 		threaddata[i].data = data;
 
 		pthread_create(&thread[i], NULL, (void* (*)(void*)) searchRunner, (void*) &threaddata[i]);
@@ -368,7 +361,7 @@ int main(int argc, char **argv){
 //Register a callback for requests
 //	evhttp_set_cb(http, "/", http_dispatcher_cb, NULL);
 	evhttp_set_cb(http, "/search", handle_search_request, request);
-	evhttp_set_cb(http, "/update", handle_search_update,  updates);
+//	evhttp_set_cb(http, "/update", handle_search_update,  updates);
 	evhttp_set_cb(http, "/stats",  handle_stats,          NULL);
 
 	event_set(& updateEvent, popfd, EV_READ|EV_PERSIST, handle_queue_response, response);
@@ -383,7 +376,7 @@ int main(int argc, char **argv){
 
 	printf("Exiting\n");
 
-	tq_nonblock(request);
+	request->nonblock();
 	for(i = 0; i < numthreads; i++)
 		pthread_join(thread[i], NULL);
 

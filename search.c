@@ -177,24 +177,25 @@ void search_data::fillRand(uint32_t count){
 
 
 
-inline char search_data::matchUser(const user_t * user, const search * srch){
-	return 	user->age >= srch->agemin && user->age <= srch->agemax &&
-			(!srch->loc || user->loc == srch->loc) &&
-			(srch->sex == 2 || user->sex == srch->sex) &&
-			user->active >= srch->active &&
-			user->pic    >= srch->pic    &&
-			user->single >= srch->single &&
-			(!srch->sexuality || user->sexuality == srch->sexuality);
+inline char search_data::matchUser(const user_t & user, const search & srch){
+	return 	user.age >= srch.agemin && user.age <= srch.agemax &&
+			(!srch.loc || user.loc == srch.loc) &&
+			(srch.sex == 2 || user.sex == srch.sex) &&
+			user.active >= srch.active &&
+			user.pic    >= srch.pic    &&
+			user.single >= srch.single &&
+			(!srch.sexuality || user.sexuality == srch.sexuality);
 }
 
 void search_data::searchUsers(search * srch){
 	unsigned int i;
+	vector<user_t>::iterator it, end;
 
 	srch->totalrows = 0;
 	srch->results.reserve(srch->rowcount);
 
-	for(i = 0; i < userlist.size(); i++){
-		if(matchUser(& userlist[i], srch)){
+	for(i = 0, it = userlist.begin(), end = userlist.end(); it != end; it++, i++){
+		if(matchUser(* it, * srch)){
 			srch->totalrows++;
 
 			if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range
