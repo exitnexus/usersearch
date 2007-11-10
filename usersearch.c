@@ -84,11 +84,13 @@ void * updateRunner(thread_data_t * threaddata){
 				case USER_UPDATE:
 					global->data->updateUser(upd);
 					break;
-					
+
 				case USER_DELETE:
 					global->data->delUser(upd->userid);
 					break;
 			}
+
+			delete upd;
 		}
 	}
 
