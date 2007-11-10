@@ -71,9 +71,10 @@ typedef uint32_t userid_t;
 #define BIT_PACK_USER_STRUCT 1
 
 
+
 #if BIT_PACK_USER_STRUCT
 
-typedef struct {
+struct user_t {
 	uint16_t loc;
 	unsigned char age;
 	unsigned int sex       :1 ;
@@ -81,11 +82,11 @@ typedef struct {
 	unsigned int pic       :2 ;
 	unsigned int single    :1 ;
 	unsigned int sexuality :2 ;
-} user_t;
+};
 
 #else
 
-typedef struct {
+struct user_t {
 	uint16_t loc;            // location id
 	unsigned char age;       // age (14-60)
 	unsigned char sex;       // 0 : male, 1 : female
@@ -93,7 +94,7 @@ typedef struct {
 	unsigned char pic;       // 0 : no pic, 1 : pic, 2 : sign pic
 	unsigned char single;    // 0 : not single, 1 : single
 	unsigned char sexuality; // 0 : unknown, 1 : hetero, 2 : homo, 3 : bi
-} user_t;
+};
 
 #endif
 
@@ -105,6 +106,33 @@ typedef struct {
 
 } interest_t;
 
+
+
+enum userfield {
+	UF_LOC,
+	UF_AGE,
+	UF_SEX,
+	UF_ACTIVE,
+	UF_PIC,
+	UF_SINGLE,
+	UF_SEXUALITY,
+	UF_INTEREST
+};
+
+enum userop {
+	USER_ADD,
+	USER_UPDATE,
+	USER_DELETE
+};
+
+struct user_update {
+	userid_t  userid;
+	userop    op;    //add, update, delete
+	user_t    user;  //for insert
+	userfield field; //for updates
+	uint32_t  key;   //if updating interest
+	uint32_t  val;   //value to set the field to
+};
 
 
 
@@ -160,6 +188,7 @@ public:
 	void fillSearchUrl(char * url);
 
 	uint32_t setUser(const userid_t userid, const user_t user);
+	bool updateUser(user_update * upd);
 	bool delUser(userid_t userid);
 
 	void printUser(userid_t userid);

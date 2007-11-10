@@ -20,15 +20,26 @@
 #define MAX_THREADS 100
 
 
-typedef struct {
-	unsigned int threadid;
-	char state;
+struct global_data {
 	int pushfd;
-	tqueue<search> * updates;
+	int popfd;
+	tqueue<user_update> * updates;
 	tqueue<search> * request;
 	tqueue<search> * response;
 	search_data * data;
-} thread_data_t;
+};
+
+struct thread_data_t {
+/*	thread_data_t(){
+		threadid = 0;
+		state = 0;
+		global = NULL;
+	}
+*/	unsigned int threadid;
+	char state;
+	global_data * global;
+};
+
 
 
 //to tell the main thread that there is new stuff in the queue
@@ -40,25 +51,58 @@ void signalfd(int fd){
 
 void * searchRunner(thread_data_t * threaddata){
 	search * srch;
+	global_data * global = threaddata->global;
 
 	while(threaddata->state){
-		srch = threaddata->request->pop();
+		srch = global->request->pop();
 
-		if(!srch)
-			break;
-
-		threaddata->data->searchUsers(srch);
-
-		threaddata->response->push(srch);
-		signalfd(threaddata->pushfd);
+		if(srch){
+			global->data->searchUsers(srch);
+	
+			global->response->push(srch);
+			signalfd(global->pushfd);
+		}
 	}
 
 	return NULL;
 }
 
 
-void handle_queue_response(int fd, short event, void *arg){
-	tqueue<search> * response = (tqueue<search> *)arg;
+void * updateRunner(thread_data_t * threaddata){
+	user_update * upd;
+	global_data * global = threaddata->global;
+
+	while(threaddata->state){
+		upd = global->updates->pop();
+
+		if(upd){
+			switch(upd->op){
+				case USER_ADD:
+					printf("New user: %u\n", upd->userid);
+					global->data->setUser(upd->userid, upd->user);
+					break;
+
+				case USER_UPDATE:
+					printf("Update for user: %u, %u, %u\n", upd->userid, upd->field, upd->val);
+					global->data->updateUser(upd);
+					break;
+					
+				case USER_DELETE:
+					printf("Delete user: %u\n", upd->userid);
+					global->data->delUser(upd->userid);
+					break;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+
+
+
+void handle_queue_searchresponse(int fd, short event, void *arg){
+	global_data * global = (global_data *) arg;
 	search * srch;
 
 	struct evbuffer *evb;
@@ -68,7 +112,7 @@ void handle_queue_response(int fd, short event, void *arg){
 	char buf[64];
 	read(fd, buf, sizeof(buf));
 
-	while((srch = response->pop(0))){ //pop a response in non-block mode
+	while((srch = global->response->pop(0))){ //pop a response in non-block mode
 		evb = evbuffer_new();
 
 		evbuffer_add_printf(evb, "Total Rows: %u\n", srch->totalrows);
@@ -84,8 +128,9 @@ void handle_queue_response(int fd, short event, void *arg){
 	}
 }
 
-void handle_search_request(struct evhttp_request *req, void *arg){
-	tqueue<search> * request = (tqueue<search> *)arg;
+//handles /search?...
+void handle_request_search(struct evhttp_request *req, void *arg){
+	global_data * global = (global_data *) arg;
 
 	search * srch = new search();
 	const char * ptr;
@@ -123,14 +168,168 @@ void handle_search_request(struct evhttp_request *req, void *arg){
 
 //	srch.verbosePrint();
 
-	request->push(srch);
+	global->request->push(srch);
 }
 
-void handle_search_update(struct evhttp_request *req, void *arg){
-//	tqueue<search> * updates = (tqueue<search> *)arg;
+
+void handle_request_printuser(struct evhttp_request *req, void *arg){
+	global_data * global = (global_data *) arg;
+
+	const char * ptr;
+	userid_t userid;
+
+	struct evkeyvalq searchoptions;
+	struct evbuffer * evb = evbuffer_new();
+
+	evhttp_parse_query(req->uri, &searchoptions);
+
+	ptr = evhttp_find_header(&searchoptions, "userid");
+
+	if(ptr){
+		userid = atoi(ptr);
+
+		global->data->verbosePrintUser(userid);
+
+		evbuffer_add_printf(evb, "SUCCESS\r\n");
+	}else{
+		evbuffer_add_printf(evb, "FAIL\r\n");
+	}
+
+	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evbuffer_free(evb);
 }
 
-void handle_stats(struct evhttp_request *req, void *arg){
+void push_update(global_data * global, userid_t userid, userfield field, uint32_t val){
+	user_update * upd = new user_update;
+
+	upd->op = USER_UPDATE;
+	upd->userid = userid;
+
+	upd->field = field;
+	upd->val = val;
+
+printf("Pushing update for user: %u, %u, %u\n", upd->userid, upd->field, upd->val);
+
+	global->updates->push(upd);
+}
+
+//handles /updateuser?userid=<userid>&age=<age>&....
+void handle_request_updateuser(struct evhttp_request *req, void *arg){
+	global_data * global = (global_data *) arg;
+
+	const char * ptr;
+	userid_t userid;
+	unsigned int i = 0;
+
+	struct evkeyvalq searchoptions;
+
+	struct evbuffer * evb = evbuffer_new();
+
+	evhttp_parse_query(req->uri, &searchoptions);
+
+	ptr = evhttp_find_header(&searchoptions, "userid");
+
+	if(ptr){
+		userid = atoi(ptr);
+
+		if((ptr = evhttp_find_header(&searchoptions, "loc")))       {push_update(global, userid, UF_LOC,       atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "age")))       {push_update(global, userid, UF_AGE,       atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "sex")))       {push_update(global, userid, UF_SEX,       atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "active")))    {push_update(global, userid, UF_ACTIVE,    atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "pic")))       {push_update(global, userid, UF_PIC,       atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "single")))    {push_update(global, userid, UF_SINGLE,    atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) {push_update(global, userid, UF_SEXUALITY, atoi(ptr)); i++; }
+
+printf("Update command: user %u, %u updates\n", userid, i);
+
+		evbuffer_add_printf(evb, "SUCCESS\r\n");
+	}else{
+		evbuffer_add_printf(evb, "FAIL\r\n");
+	}
+
+	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evbuffer_free(evb);
+}
+
+
+//handles /adduser?userid=<userid>&age=<age>&....
+void handle_request_adduser(struct evhttp_request *req, void *arg){
+	global_data * global = (global_data *) arg;
+
+	user_t   user;
+	userid_t userid = 0;
+
+	int error = 0;
+
+	user_update * upd;
+
+	struct evkeyvalq searchoptions;
+	struct evbuffer * evb = evbuffer_new();
+	const char * ptr;
+
+	evhttp_parse_query(req->uri, &searchoptions);
+
+	if((ptr = evhttp_find_header(&searchoptions, "userid")))    userid         = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "loc")))       user.loc       = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "age")))       user.age       = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "sex")))       user.sex       = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "active")))    user.active    = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "pic")))       user.pic       = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "single")))    user.single    = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) user.sexuality = atoi(ptr); else error = 1;
+
+	if(!error){
+		upd = new user_update;
+
+		upd->op = USER_ADD;
+		upd->userid = userid;
+		upd->user = user;
+
+		global->updates->push(upd);
+
+		evbuffer_add_printf(evb, "SUCCESS\r\n");
+	}else{
+		evbuffer_add_printf(evb, "FAIL\r\n");
+	}
+
+	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evbuffer_free(evb);
+}
+
+
+// handles /deleteuser?userid=<userid>
+void handle_request_deleteuser(struct evhttp_request *req, void *arg){
+	global_data * global = (global_data *) arg;
+
+	user_update * upd;
+
+	struct evkeyvalq searchoptions;
+	struct evbuffer *evb = evbuffer_new();
+	const char * ptr;
+
+	evhttp_parse_query(req->uri, &searchoptions);
+
+	ptr = evhttp_find_header(&searchoptions, "userid");
+
+	if(ptr){
+		upd = new user_update;
+
+		upd->op = USER_DELETE;
+		upd->userid = atoi(ptr);
+
+		global->updates->push(upd);
+
+		evbuffer_add_printf(evb, "SUCCESS\r\n");
+	}else{
+		evbuffer_add_printf(evb, "FAIL\r\n");
+	}
+
+	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evbuffer_free(evb);
+}
+
+
+void handle_request_stats(struct evhttp_request *req, void *arg){
 	struct evbuffer *evb;
 	evb = evbuffer_new();
 
@@ -141,27 +340,6 @@ void handle_stats(struct evhttp_request *req, void *arg){
 	evbuffer_free(evb);
 }
 
-/*
-void * updateRunner(thread_data_t * threaddata){
-//	search_t ** searches;
-	search_t * search;
-
-	while(threaddata->state){
-		search = tq_pop(threaddata->request);
-
-		if(!search)
-			break;
-
-		searchUsers(threaddata->data, & search, 1);
-
-		tq_push(threaddata->response, 0, (void *) search);
-		signalfd(threaddata->pushfd);
-	}
-
-	return NULL;
-}
-*/
-
 
 unsigned int get_now(void){
 	struct timeval now_tv;
@@ -169,8 +347,7 @@ unsigned int get_now(void){
 	return now_tv.tv_sec;
 }
 
-
-void benchmarkSearch(tqueue<search> * request, tqueue<search> * response, unsigned int numsearches){
+void benchmarkSearch(global_data * global, unsigned int numsearches){
 	printf("Generating %u searches\n", numsearches);
 
 	struct timeval start, finish;
@@ -188,7 +365,7 @@ void benchmarkSearch(tqueue<search> * request, tqueue<search> * response, unsign
 
 //		srch->verbosePrint();
 
-		request->push(srch);
+		global->request->push(srch);
 	}
 
 
@@ -197,7 +374,7 @@ void benchmarkSearch(tqueue<search> * request, tqueue<search> * response, unsign
 	found = returned = 0;
 
 	for(i = 0; i < numsearches; i++){
-		srch = response->pop();
+		srch = global->response->pop();
 
 //		srch->verbosePrint();
 
@@ -223,26 +400,29 @@ int main(int argc, char **argv){
 	unsigned int benchruns;
 	unsigned int port;
 
+	global_data * global = new global_data;
+
+
 //main search data
-	search_data * data;
+	global->data = new search_data;
 
 //3 queues
-	tqueue<search> * updates  = new tqueue<search>();
-	tqueue<search> * request  = new tqueue<search>();
-	tqueue<search> * response = new tqueue<search>();
+	global->updates  = new tqueue<user_update>();
+	global->request  = new tqueue<search>();
+	global->response = new tqueue<search>();
 
 //thread stuff
 	pthread_t thread[MAX_THREADS];
 	thread_data_t threaddata[MAX_THREADS];
-
-
+	//memset(thread, 0, sizeof(pthread_t)*MAX_THREADS);
+	//memset(threaddata, 0, sizeof(thread_data_t)*MAX_THREADS);
 //http server stuff
 	struct evhttp *http;
 	struct event updateEvent;
 
 
 //notification fds
-	int fds[2], pushfd = 0, popfd = 0;
+	int fds[2];
 
 
 	srand(time(NULL));
@@ -309,28 +489,26 @@ int main(int argc, char **argv){
 
 
 	printf("Loading user data ... ");
-	data = new search_data();
 	if(load_loc[0] == '-')
-		data->fillSearchStdin();
-	else if(stlen(load_loc) > 7 && strncmp("http://", load_loc, 7) == 0)
-		data->fillSearchUrl(load_loc);
+		global->data->fillSearchStdin();
+	else if(strlen(load_loc) > 7 && strncmp("http://", load_loc, 7) == 0)
+		global->data->fillSearchUrl(load_loc);
 	else
-		data->fillSearchFile(load_loc);
+		global->data->fillSearchFile(load_loc);
 	
-//	data->fillRand(100000);
+//	global->data->fillRand(100000);
 
-	printf("%u users loaded\n", data->userlist.size());
+	printf("%u users loaded\n", global->data->userlist.size());
 
 //	data->dumpSearchData(10);
-
 
 
 	if(!benchruns){
 	//initialize update notification pipe
 		socketpair(AF_UNIX, SOCK_STREAM, 0, fds);
 
-		pushfd = fds[0];
-		popfd = fds[1];
+		global->pushfd = fds[0];
+		global->popfd = fds[1];
 	}
 
 	printf("Starting %u threads\n", numthreads);
@@ -338,18 +516,19 @@ int main(int argc, char **argv){
 	for(i = 0; i < numthreads; i++){
 		threaddata[i].threadid = i;
 		threaddata[i].state = 1;
-		threaddata[i].pushfd = pushfd;
-		threaddata[i].request = request;
-		threaddata[i].response = response;
-		threaddata[i].updates = updates;
-		threaddata[i].data = data;
-
+		threaddata[i].global = global;
+		
 		pthread_create(&thread[i], NULL, (void* (*)(void*)) searchRunner, (void*) &threaddata[i]);
 	}
+	
+	threaddata[i].threadid = i;
+	threaddata[i].state = 1;
+	threaddata[i].global = global;
+	pthread_create(&thread[i], NULL, (void* (*)(void*)) updateRunner, (void*) &threaddata[i]);
 
 
 	if(benchruns){
-		benchmarkSearch(request, response, benchruns);
+		benchmarkSearch(global, benchruns);
 		return 0;
 	}
 
@@ -371,11 +550,18 @@ int main(int argc, char **argv){
 
 //Register a callback for requests
 //	evhttp_set_cb(http, "/", http_dispatcher_cb, NULL);
-	evhttp_set_cb(http, "/search", handle_search_request, request);
-//	evhttp_set_cb(http, "/update", handle_search_update,  updates);
-	evhttp_set_cb(http, "/stats",  handle_stats,          NULL);
+	evhttp_set_cb(http, "/search",     handle_request_search,     global);
+	
+	evhttp_set_cb(http, "/updateuser", handle_request_updateuser, global);
+	evhttp_set_cb(http, "/adduser",    handle_request_adduser,    global);
+	evhttp_set_cb(http, "/deleteuser", handle_request_deleteuser, global);
+	
+	evhttp_set_cb(http, "/printuser",  handle_request_printuser, global);
+	
+	
+	evhttp_set_cb(http, "/stats",      handle_request_stats,      NULL);
 
-	event_set(& updateEvent, popfd, EV_READ|EV_PERSIST, handle_queue_response, response);
+	event_set(& updateEvent, global->popfd, EV_READ|EV_PERSIST, handle_queue_searchresponse, global);
 	event_add(& updateEvent, 0);
 
 
@@ -387,7 +573,7 @@ int main(int argc, char **argv){
 
 	printf("Exiting\n");
 
-	request->nonblock();
+	global->request->nonblock();
 	for(i = 0; i < numthreads; i++)
 		pthread_join(thread[i], NULL);
 

@@ -61,7 +61,9 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 		userlist[index] = user;
 		usermap[index] = userid;
 
-		useridmap.reserve(userid+1);
+		while(useridmap.size() < userid)
+			useridmap.push_back(0);
+
 		useridmap[userid] = index;
 
 	}else{ //make space
@@ -71,12 +73,36 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 
 		userlist.push_back(user);
 		usermap.push_back(userid);
-		
-		useridmap.reserve(userid+1);
+
+		while(useridmap.size() < userid)
+			useridmap.push_back(0);
+
 		useridmap[userid] = index;
 	}
 
 	return index;
+}
+
+bool search_data::updateUser(user_update * upd){
+	uint32_t index;
+
+	if(useridmap.size() < upd->userid || !useridmap[upd->userid]) //doesn't exist, can't update
+		return false;
+
+	index = useridmap[upd->userid];
+
+	switch(upd->field){
+		case UF_LOC:       userlist[index].loc       = upd->val; break;
+		case UF_AGE:       userlist[index].age       = upd->val; break;
+		case UF_SEX:       userlist[index].sex       = upd->val; break;
+		case UF_ACTIVE:    userlist[index].active    = upd->val; break;
+		case UF_PIC:       userlist[index].pic       = upd->val; break;
+		case UF_SINGLE:    userlist[index].single    = upd->val; break;
+		case UF_SEXUALITY: userlist[index].sexuality = upd->val; break;
+		case UF_INTEREST:  break;
+	}
+
+	return true;
 }
 
 bool search_data::delUser(userid_t userid){
@@ -132,9 +158,9 @@ void search_data::fillSearchStdin(){
 	uint32_t i = 0;
 
 //read the file into the struct.
-	fgets(buf, 255, STDIN); //ignore the first line
+	fgets(buf, 255, stdin); //ignore the first line
 
-	while(fgets(buf, 255, STDIN)){
+	while(fgets(buf, 255, stdin)){
 		i++;
 
 		if(!parseBuf(buf)){
