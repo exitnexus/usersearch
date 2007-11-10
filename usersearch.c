@@ -78,17 +78,14 @@ void * updateRunner(thread_data_t * threaddata){
 		if(upd){
 			switch(upd->op){
 				case USER_ADD:
-					printf("New user: %u\n", upd->userid);
 					global->data->setUser(upd->userid, upd->user);
 					break;
 
 				case USER_UPDATE:
-					printf("Update for user: %u, %u, %u\n", upd->userid, upd->field, upd->val);
 					global->data->updateUser(upd);
 					break;
 					
 				case USER_DELETE:
-					printf("Delete user: %u\n", upd->userid);
 					global->data->delUser(upd->userid);
 					break;
 			}
@@ -208,8 +205,6 @@ void push_update(global_data * global, userid_t userid, userfield field, uint32_
 	upd->field = field;
 	upd->val = val;
 
-printf("Pushing update for user: %u, %u, %u\n", upd->userid, upd->field, upd->val);
-
 	global->updates->push(upd);
 }
 
@@ -239,8 +234,6 @@ void handle_request_updateuser(struct evhttp_request *req, void *arg){
 		if((ptr = evhttp_find_header(&searchoptions, "pic")))       {push_update(global, userid, UF_PIC,       atoi(ptr)); i++; }
 		if((ptr = evhttp_find_header(&searchoptions, "single")))    {push_update(global, userid, UF_SINGLE,    atoi(ptr)); i++; }
 		if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) {push_update(global, userid, UF_SEXUALITY, atoi(ptr)); i++; }
-
-printf("Update command: user %u, %u updates\n", userid, i);
 
 		evbuffer_add_printf(evb, "SUCCESS\r\n");
 	}else{
