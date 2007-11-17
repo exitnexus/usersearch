@@ -168,6 +168,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 //	srch.verbosePrint();
 
 	global->request->push(srch);
+	evhttp_clear_headers(&searchoptions);
 }
 
 
@@ -195,6 +196,7 @@ void handle_request_printuser(struct evhttp_request *req, void *arg){
 	}
 
 	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evhttp_clear_headers(&searchoptions);
 	evbuffer_free(evb);
 }
 
@@ -243,6 +245,7 @@ void handle_request_updateuser(struct evhttp_request *req, void *arg){
 	}
 
 	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evhttp_clear_headers(&searchoptions);
 	evbuffer_free(evb);
 }
 
@@ -288,6 +291,7 @@ void handle_request_adduser(struct evhttp_request *req, void *arg){
 	}
 
 	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evhttp_clear_headers(&searchoptions);
 	evbuffer_free(evb);
 }
 
@@ -320,6 +324,7 @@ void handle_request_deleteuser(struct evhttp_request *req, void *arg){
 	}
 
 	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+	evhttp_clear_headers(&searchoptions);
 	evbuffer_free(evb);
 }
 
