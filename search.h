@@ -191,10 +191,15 @@ public:
 	bool updateUser(user_update * upd);
 	bool delUser(userid_t userid);
 
-	void printUser(userid_t userid);
+	bool printUser(userid_t userid);
 	void printUser(userid_t userid, user_t * user);
-	void verbosePrintUser(userid_t userid);
+	bool userToString(userid_t userid, char * buffer);
+	void userToString(userid_t userid, user_t * user, char * buffer);
+
+	bool verbosePrintUser(userid_t userid);
 	void verbosePrintUser(userid_t userid, user_t * user);
+	bool userToStringVerbose(userid_t userid, char * buffer);
+	void userToStringVerbose(userid_t userid, user_t * user, char * buffer);
 	
 	void dumpSearchData(unsigned int max = 0);
 
@@ -202,7 +207,7 @@ public:
 
 private:
 	inline char matchUser(const user_t & user, const search & srch);
-	userid_t search_data::parseBuf(char *buf);
+	userid_t parseBuf(char *buf);
 
 };
 

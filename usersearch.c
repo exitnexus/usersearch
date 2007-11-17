@@ -20,9 +20,18 @@
 #define MAX_THREADS 100
 
 
+struct search_stats {
+	unsigned int starttime;
+	unsigned int search;
+	unsigned int adduser;
+	unsigned int updateuser;
+	unsigned int deleteuser;
+};
+
 struct global_data {
 	int pushfd;
 	int popfd;
+	search_stats stats;
 	tqueue<user_update> * updates;
 	tqueue<search> * request;
 	tqueue<search> * response;
@@ -41,6 +50,11 @@ struct thread_data_t {
 };
 
 
+unsigned int get_now(void){
+	struct timeval now_tv;
+	gettimeofday(&now_tv, NULL);
+	return now_tv.tv_sec;
+}
 
 //to tell the main thread that there is new stuff in the queue
 void signalfd(int fd){
@@ -131,6 +145,8 @@ void handle_queue_searchresponse(int fd, short event, void *arg){
 void handle_request_search(struct evhttp_request *req, void *arg){
 	global_data * global = (global_data *) arg;
 
+	global->stats.search++;
+
 	search * srch = new search();
 	const char * ptr;
 	struct evkeyvalq searchoptions;
@@ -154,10 +170,10 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	srch->rowcount = 25;
 	srch->totalrows = 0;
 
-	if((ptr = evhttp_find_header(&searchoptions, "loc")))       srch->loc       = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "agemin")))    srch->agemin    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "agemax")))    srch->agemax    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "sex")))       srch->sex       = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "loc")))       srch->loc       = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "active")))    srch->active    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "pic")))       srch->pic       = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "single")))    srch->single    = atoi(ptr);
@@ -177,6 +193,7 @@ void handle_request_printuser(struct evhttp_request *req, void *arg){
 
 	const char * ptr;
 	userid_t userid;
+	char buf[100];
 
 	struct evkeyvalq searchoptions;
 	struct evbuffer * evb = evbuffer_new();
@@ -188,9 +205,10 @@ void handle_request_printuser(struct evhttp_request *req, void *arg){
 	if(ptr){
 		userid = atoi(ptr);
 
-		global->data->verbosePrintUser(userid);
-
-		evbuffer_add_printf(evb, "SUCCESS\r\n");
+		if(global->data->userToStringVerbose(userid, buf))
+			evbuffer_add_printf(evb, "%s", buf);
+		else
+			evbuffer_add_printf(evb, "Bad Userid\r\n");
 	}else{
 		evbuffer_add_printf(evb, "FAIL\r\n");
 	}
@@ -216,6 +234,8 @@ void push_update(global_data * global, userid_t userid, userfield field, uint32_
 void handle_request_updateuser(struct evhttp_request *req, void *arg){
 	global_data * global = (global_data *) arg;
 
+	global->stats.updateuser++;
+
 	const char * ptr;
 	userid_t userid;
 	unsigned int i = 0;
@@ -231,9 +251,9 @@ void handle_request_updateuser(struct evhttp_request *req, void *arg){
 	if(ptr){
 		userid = atoi(ptr);
 
-		if((ptr = evhttp_find_header(&searchoptions, "loc")))       {push_update(global, userid, UF_LOC,       atoi(ptr)); i++; }
 		if((ptr = evhttp_find_header(&searchoptions, "age")))       {push_update(global, userid, UF_AGE,       atoi(ptr)); i++; }
 		if((ptr = evhttp_find_header(&searchoptions, "sex")))       {push_update(global, userid, UF_SEX,       atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "loc")))       {push_update(global, userid, UF_LOC,       atoi(ptr)); i++; }
 		if((ptr = evhttp_find_header(&searchoptions, "active")))    {push_update(global, userid, UF_ACTIVE,    atoi(ptr)); i++; }
 		if((ptr = evhttp_find_header(&searchoptions, "pic")))       {push_update(global, userid, UF_PIC,       atoi(ptr)); i++; }
 		if((ptr = evhttp_find_header(&searchoptions, "single")))    {push_update(global, userid, UF_SINGLE,    atoi(ptr)); i++; }
@@ -254,6 +274,8 @@ void handle_request_updateuser(struct evhttp_request *req, void *arg){
 void handle_request_adduser(struct evhttp_request *req, void *arg){
 	global_data * global = (global_data *) arg;
 
+	global->stats.adduser++;
+
 	user_t   user;
 	userid_t userid = 0;
 
@@ -268,9 +290,9 @@ void handle_request_adduser(struct evhttp_request *req, void *arg){
 	evhttp_parse_query(req->uri, &searchoptions);
 
 	if((ptr = evhttp_find_header(&searchoptions, "userid")))    userid         = atoi(ptr); else error = 1;
-	if((ptr = evhttp_find_header(&searchoptions, "loc")))       user.loc       = atoi(ptr); else error = 1;
 	if((ptr = evhttp_find_header(&searchoptions, "age")))       user.age       = atoi(ptr); else error = 1;
 	if((ptr = evhttp_find_header(&searchoptions, "sex")))       user.sex       = atoi(ptr); else error = 1;
+	if((ptr = evhttp_find_header(&searchoptions, "loc")))       user.loc       = atoi(ptr); else error = 1;
 	if((ptr = evhttp_find_header(&searchoptions, "active")))    user.active    = atoi(ptr); else error = 1;
 	if((ptr = evhttp_find_header(&searchoptions, "pic")))       user.pic       = atoi(ptr); else error = 1;
 	if((ptr = evhttp_find_header(&searchoptions, "single")))    user.single    = atoi(ptr); else error = 1;
@@ -299,6 +321,8 @@ void handle_request_adduser(struct evhttp_request *req, void *arg){
 // handles /deleteuser?userid=<userid>
 void handle_request_deleteuser(struct evhttp_request *req, void *arg){
 	global_data * global = (global_data *) arg;
+
+	global->stats.deleteuser++;
 
 	user_update * upd;
 
@@ -330,21 +354,42 @@ void handle_request_deleteuser(struct evhttp_request *req, void *arg){
 
 
 void handle_request_stats(struct evhttp_request *req, void *arg){
+	global_data * global = (global_data *) arg;
+
 	struct evbuffer *evb;
 	evb = evbuffer_new();
 
-	evbuffer_add_printf(evb, "Stuff is good!");
+	evbuffer_add_printf(evb, "Uptime:      %u\n", (get_now() - global->stats.starttime));
+	evbuffer_add_printf(evb, "Search:      %u\n", global->stats.search);
+	evbuffer_add_printf(evb, "Add User:    %u\n", global->stats.adduser);
+	evbuffer_add_printf(evb, "Update User: %u\n", global->stats.updateuser);
+	evbuffer_add_printf(evb, "Delete User: %u\n", global->stats.deleteuser);
+	evbuffer_add_printf(evb, "Num Users:   %u\n", global->data->userlist.size());
 	
 	evhttp_send_reply(req, HTTP_OK, "OK", evb);
 
 	evbuffer_free(evb);
 }
 
+void handle_request_help(struct evhttp_request *req, void *arg){
+	struct evbuffer *evb;
+	evb = evbuffer_new();
 
-unsigned int get_now(void){
-	struct timeval now_tv;
-	gettimeofday(&now_tv, NULL);
-	return now_tv.tv_sec;
+	evbuffer_add_printf(evb, 
+	"This is the user search daemon\n"
+	"Commands:\n"
+	"  /search?... params: [agemin,agemax,sex,loc,active,pic,single,sexuality,offset,rowcount]\n"
+	"  /adduser?... params: userid,age,sex,loc,active,pic,single,sexuality\n"
+	"  /updateuser?... params: userid[,age,sex,loc,active,pic,single,sexuality]\n"
+	"  /deleteuser?... params: userid\n"
+	"  /printuser?...  params: userid\n"
+	"  /stats\n"
+	"  /help\n"
+	);
+	
+	evhttp_send_reply(req, HTTP_OK, "OK", evb);
+
+	evbuffer_free(evb);
 }
 
 void benchmarkSearch(global_data * global, unsigned int numsearches){
@@ -402,6 +447,7 @@ int main(int argc, char **argv){
 
 	global_data * global = new global_data;
 
+	global->stats.starttime = get_now();
 
 //main search data
 	global->data = new search_data;
@@ -498,7 +544,7 @@ int main(int argc, char **argv){
 	
 //	global->data->fillRand(100000);
 
-	printf("%u users loaded\n", global->data->userlist.size());
+	printf("%u users loaded\n", (unsigned int) global->data->userlist.size());
 
 //	data->dumpSearchData(10);
 
@@ -543,7 +589,7 @@ int main(int argc, char **argv){
 //start the http server
 	http = evhttp_start(hostname_arg, atoi(port_arg));
 	if(http == NULL) {
-		printf("Couldn't start server on %s\n", port_arg);
+		printf("Couldn't start server on %s:%s\n", hostname_arg, port_arg);
 		return 1;
 	}
 
@@ -551,15 +597,15 @@ int main(int argc, char **argv){
 //Register a callback for requests
 //	evhttp_set_cb(http, "/", http_dispatcher_cb, NULL);
 	evhttp_set_cb(http, "/search",     handle_request_search,     global);
-	
+
 	evhttp_set_cb(http, "/updateuser", handle_request_updateuser, global);
 	evhttp_set_cb(http, "/adduser",    handle_request_adduser,    global);
 	evhttp_set_cb(http, "/deleteuser", handle_request_deleteuser, global);
-	
-	evhttp_set_cb(http, "/printuser",  handle_request_printuser, global);
-	
-	
-	evhttp_set_cb(http, "/stats",      handle_request_stats,      NULL);
+
+	evhttp_set_cb(http, "/printuser",  handle_request_printuser,  global);
+
+	evhttp_set_cb(http, "/stats",      handle_request_stats,      global);
+	evhttp_set_cb(http, "/help",       handle_request_help,       NULL);
 
 	event_set(& updateEvent, global->popfd, EV_READ|EV_PERSIST, handle_queue_searchresponse, global);
 	event_add(& updateEvent, 0);

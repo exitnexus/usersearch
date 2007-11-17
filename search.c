@@ -11,26 +11,73 @@ search_data::search_data(){
 	pthread_rwlock_init(&rwlock, NULL);
 }
 
-void search_data::printUser(userid_t userid){
+//print given only a userid
+bool search_data::printUser(userid_t userid){
+	if(userid >= useridmap.size() || useridmap[userid] == 0)
+		return false;
+
 	user_t * user = & userlist[useridmap[userid]];
 	printUser(userid, user);
+
+	return true;
 }
 
-void search_data::printUser(userid_t userid, user_t * user){
-	printf("%u,%u,%s,%u,%u,%u,%u,%u\n",
-		userid, user->age, (user->sex ? "Female" : "Male"), user->loc, user->active, user->pic, user->single, user->sexuality);
-}
+bool search_data::verbosePrintUser(userid_t userid){
+	if(userid >= useridmap.size() || useridmap[userid] == 0)
+		return false;
 
-void search_data::verbosePrintUser(userid_t userid){
 	user_t * user = & userlist[useridmap[userid]];
 	verbosePrintUser(userid, user);
+
+	return true;
+}
+
+//print, given a user struct
+void search_data::printUser(userid_t userid, user_t * user){
+	char buf[100];
+	userToString(userid, user, buf);
+	printf("%s", buf);
 }
 
 void search_data::verbosePrintUser(userid_t userid, user_t * user){
-	printf("Userid: %u, Age: %u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u\n",
+	char buf[100];
+	userToStringVerbose(userid, user, buf);
+	printf("%s", buf);
+}
+
+//userToString with just userid
+bool search_data::userToString(userid_t userid, char * buffer){
+	if(userid >= useridmap.size() || useridmap[userid] == 0)
+		return false;
+
+	user_t * user = & userlist[useridmap[userid]];
+	userToString(userid, user, buffer);
+	
+	return true;
+}
+
+bool search_data::userToStringVerbose(userid_t userid, char * buffer){
+	if(userid >= useridmap.size() || useridmap[userid] == 0)
+		return false;
+
+	user_t * user = & userlist[useridmap[userid]];
+	userToStringVerbose(userid, user, buffer);
+	
+	return true;
+}
+
+//actually fill the buffers
+void search_data::userToString(userid_t userid, user_t * user, char * buffer){
+	sprintf(buffer, "%u,%u,%s,%u,%u,%u,%u,%u\n",
 		userid, user->age, (user->sex ? "Female" : "Male"), user->loc, user->active, user->pic, user->single, user->sexuality);
 }
 
+void search_data::userToStringVerbose(userid_t userid, user_t * user, char * buffer){
+	sprintf(buffer, "Userid: %u, Age: %u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u\n",
+		userid, user->age, (user->sex ? "Female" : "Male"), user->loc, user->active, user->pic, user->single, user->sexuality);
+
+}
+	
 
 void search_data::dumpSearchData(unsigned int max){
 	unsigned int i, size;
@@ -69,7 +116,7 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 	}else{ //make space
 		index = userlist.size();
 
-		assert(userlist.size() == usermap.size());
+//		assert(userlist.size() == usermap.size());
 
 		userlist.push_back(user);
 		usermap.push_back(userid);
@@ -304,7 +351,7 @@ void search::verbosePrint(){
 		loc, active, pic, single, sexuality, offset, offset+rowcount);
 
 	if(results.size()){
-		printf("Results: %u of %u: ", results.size(), totalrows);
+		printf("Results: %u of %u: ", (unsigned int)results.size(), totalrows);
 		for(unsigned int i = 0; i < results.size(); i++)
 			printf("%u,", results[i]);
 		printf("\n");
