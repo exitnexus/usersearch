@@ -4,7 +4,7 @@ class usersearchclient {
 	public $host;
 	public $port;
 	public $returnheaders;
-	
+
 	function __construct($host, $port){
 		$this->host = $host;
 		$this->port = $port;
@@ -37,7 +37,7 @@ class usersearchclient {
 
 		return ($this->cmd("updateuser", $params) == "SUCCESS");
 	}
-	
+
 	function deleteUser($userid){
 		return ($this->cmd("deleteuser", array("userid" => $userid)) == "SUCCESS");
 	}
@@ -49,12 +49,12 @@ class usersearchclient {
 
 		$results = array();
 
-		$results['userids'] = explode(",", trim(array_pop($lines), ','));
-
 		foreach($lines as $line){
-			list($k, $v) = explode(": ", $line);
+			list($k, $v) = explode(":", $line, 2);
 			$results[$k] = $v;
 		}
+
+		$results['userids'] = explode(",", trim($results['userids'], " ,"));
 
 		return $results;
 	}

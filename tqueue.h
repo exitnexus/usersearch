@@ -76,14 +76,14 @@ public:
 		pthread_cond_signal(&cv);
 	}
 
-	unsigned int size() const {
+	unsigned int size(){
 		pthread_mutex_lock(&lock);
 		unsigned int ret = (unsigned int)q.size();
 		pthread_mutex_unlock(&lock);
 		return ret;
 	}
 
-	bool empty() const{
+	bool empty(){
 		pthread_mutex_lock(&lock);
 		bool ret = q.empty();
 		pthread_mutex_unlock(&lock);

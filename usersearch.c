@@ -128,8 +128,9 @@ void handle_queue_searchresponse(int fd, short event, void *arg){
 	while((srch = global->response->pop(0))){ //pop a response in non-block mode
 		evb = evbuffer_new();
 
-		evbuffer_add_printf(evb, "Total Rows: %u\n", srch->totalrows);
-		evbuffer_add_printf(evb, "Returned Rows: %u\n", srch->results.size());
+		evbuffer_add_printf(evb, "totalrows: %u\n", srch->totalrows);
+		evbuffer_add_printf(evb, "returnedrows: %u\n", srch->results.size());
+		evbuffer_add_printf(evb, "userids: ", srch->results.size());
 		for(i = 0; i < srch->results.size(); i++)
 			evbuffer_add_printf(evb, "%u,", srch->results[i]);
 		evbuffer_add_printf(evb, "\n");
@@ -165,6 +166,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	srch->pic = 1;
 	srch->single = 0;
 	srch->sexuality = 0;
+	srch->interest = 0;
 
 	srch->offset = 0;
 	srch->rowcount = 25;
@@ -178,6 +180,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "pic")))       srch->pic       = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "single")))    srch->single    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) srch->sexuality = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "interest")))  srch->interest  = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
 
@@ -230,6 +233,26 @@ void push_update(global_data * global, userid_t userid, userfield field, uint32_
 	global->updates->push(upd);
 }
 
+void push_update_interest(global_data * global, userid_t userid, userfield field, const char * origstr){
+	char * newstr = strdup(origstr);
+	char * ptr, * next;
+	
+	ptr = newstr;
+
+	do{
+		next = strchr(ptr, ',');
+
+		if(next)
+			*next = '\0';
+
+		push_update(global, userid, field, atoi(ptr));
+
+		ptr = next+1;
+	}while(next);
+
+	free(newstr);
+}
+
 //handles /updateuser?userid=<userid>&age=<age>&....
 void handle_request_updateuser(struct evhttp_request *req, void *arg){
 	global_data * global = (global_data *) arg;
@@ -238,7 +261,6 @@ void handle_request_updateuser(struct evhttp_request *req, void *arg){
 
 	const char * ptr;
 	userid_t userid;
-	unsigned int i = 0;
 
 	struct evkeyvalq searchoptions;
 
@@ -251,13 +273,16 @@ void handle_request_updateuser(struct evhttp_request *req, void *arg){
 	if(ptr){
 		userid = atoi(ptr);
 
-		if((ptr = evhttp_find_header(&searchoptions, "age")))       {push_update(global, userid, UF_AGE,       atoi(ptr)); i++; }
-		if((ptr = evhttp_find_header(&searchoptions, "sex")))       {push_update(global, userid, UF_SEX,       atoi(ptr)); i++; }
-		if((ptr = evhttp_find_header(&searchoptions, "loc")))       {push_update(global, userid, UF_LOC,       atoi(ptr)); i++; }
-		if((ptr = evhttp_find_header(&searchoptions, "active")))    {push_update(global, userid, UF_ACTIVE,    atoi(ptr)); i++; }
-		if((ptr = evhttp_find_header(&searchoptions, "pic")))       {push_update(global, userid, UF_PIC,       atoi(ptr)); i++; }
-		if((ptr = evhttp_find_header(&searchoptions, "single")))    {push_update(global, userid, UF_SINGLE,    atoi(ptr)); i++; }
-		if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) {push_update(global, userid, UF_SEXUALITY, atoi(ptr)); i++; }
+		if((ptr = evhttp_find_header(&searchoptions, "age")))       push_update(global, userid, UF_AGE,       atoi(ptr));
+		if((ptr = evhttp_find_header(&searchoptions, "sex")))       push_update(global, userid, UF_SEX,       atoi(ptr));
+		if((ptr = evhttp_find_header(&searchoptions, "loc")))       push_update(global, userid, UF_LOC,       atoi(ptr));
+		if((ptr = evhttp_find_header(&searchoptions, "active")))    push_update(global, userid, UF_ACTIVE,    atoi(ptr));
+		if((ptr = evhttp_find_header(&searchoptions, "pic")))       push_update(global, userid, UF_PIC,       atoi(ptr));
+		if((ptr = evhttp_find_header(&searchoptions, "single")))    push_update(global, userid, UF_SINGLE,    atoi(ptr));
+		if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) push_update(global, userid, UF_SEXUALITY, atoi(ptr));
+
+		if((ptr = evhttp_find_header(&searchoptions, "addinterests"))) push_update_interest(global, userid, UF_ADD_INTEREST, ptr);
+		if((ptr = evhttp_find_header(&searchoptions, "delinterests"))) push_update_interest(global, userid, UF_DEL_INTEREST, ptr);
 
 		evbuffer_add_printf(evb, "SUCCESS\r\n");
 	}else{
@@ -364,8 +389,8 @@ void handle_request_stats(struct evhttp_request *req, void *arg){
 	evbuffer_add_printf(evb, "Add User:    %u\n", global->stats.adduser);
 	evbuffer_add_printf(evb, "Update User: %u\n", global->stats.updateuser);
 	evbuffer_add_printf(evb, "Delete User: %u\n", global->stats.deleteuser);
-	evbuffer_add_printf(evb, "Num Users:   %u\n", global->data->userlist.size());
-	
+	evbuffer_add_printf(evb, "Num Users:   %u\n", global->data->size());
+
 	evhttp_send_reply(req, HTTP_OK, "OK", evb);
 
 	evbuffer_free(evb);
@@ -496,7 +521,7 @@ int main(int argc, char **argv){
 		if(strcmp(ptr, "--help") == 0){
 			printf("Usage:\n"
 				"\t--help        Show this help\n"
-				"\t-l            Load data from this location (url, filename or - for stdin)\n"
+				"\t-l            Load data from this location (rand:num, url, filename or - for stdin)\n"
 				"\t-p            Port Number [%s]\n"
 				"\t-h            Hostname [%s]\n"
 				"\t-b            Benchark with number of random searches\n"
@@ -539,12 +564,12 @@ int main(int argc, char **argv){
 		global->data->fillSearchStdin();
 	else if(strlen(load_loc) > 7 && strncmp("http://", load_loc, 7) == 0)
 		global->data->fillSearchUrl(load_loc);
+	else if(strlen(load_loc) > 6 && strncmp("rand:", load_loc, 5) == 0)
+		global->data->fillRand(atoi(load_loc+5));
 	else
 		global->data->fillSearchFile(load_loc);
-	
-//	global->data->fillRand(100000);
 
-	printf("%u users loaded\n", (unsigned int) global->data->userlist.size());
+	printf("%u users loaded\n", (unsigned int) global->data->size());
 
 //	data->dumpSearchData(10);
 

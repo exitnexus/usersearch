@@ -107,7 +107,7 @@ while($line = readline()){
 				if(rand(1,3) == 1) $params['single'] = rand(0,1);
 				if(rand(1,5) == 1) $params['sexuality'] = rand(0,3);
 
-				$results = $client->search($params);
+//				$results = $client->search($params);
 			}
 
 			$end = microtime(true);
@@ -132,6 +132,19 @@ while($line = readline()){
 
 		case 'printuser':
 			echo $client->cmd($cmd, array('userid' => $params));
+			break;
+
+		case 'help':
+			echo "Client side commands:\n";
+			echo "  quit - quit\n";
+			echo "  showheaders - show the headers of responses sent from the server\n";
+			echo "  hideheaders - hide the headers of responses sent from the server\n";
+			echo "  clientbench numreq command - benchmark the server, single threaded\n";
+			echo "  ab -n <num req> -c <concurrency> command - benchmark the server using ab\n";
+			echo "  test <num req> - benchmark with a variety of add, update, delete and searches\n";
+			echo "  printuser <userid> - Shortcut to print a user\n";
+			echo "\n";
+			echo $client->cmd("help", array());
 			break;
 
 		default:

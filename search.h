@@ -56,15 +56,19 @@
  *
  ************************/
 
-using namespace std;
-
-#include <vector>
 
 #ifndef _SEARCH_H_
 #define _SEARCH_H_
 
 
 typedef uint32_t userid_t;
+
+
+using namespace std;
+
+#include <vector>
+#include "interests.h"
+
 
 
 
@@ -99,14 +103,6 @@ struct user_t {
 #endif
 
 
-typedef struct {
-	
-
-
-
-} interest_t;
-
-
 
 enum userfield {
 	UF_LOC,
@@ -116,7 +112,8 @@ enum userfield {
 	UF_PIC,
 	UF_SINGLE,
 	UF_SEXUALITY,
-	UF_INTEREST
+	UF_ADD_INTEREST,
+	UF_DEL_INTEREST
 };
 
 enum userop {
@@ -130,7 +127,6 @@ struct user_update {
 	userop    op;    //add, update, delete
 	user_t    user;  //for insert
 	userfield field; //for updates
-	uint32_t  key;   //if updating interest
 	uint32_t  val;   //value to set the field to
 };
 
@@ -149,7 +145,7 @@ public:
 	unsigned char pic;
 	unsigned char single;
 	unsigned char sexuality;
-//	uint16_t interest;
+	uint32_t interest;
 
 //limits
 	unsigned int rowcount; // ie find 25 results
@@ -169,10 +165,12 @@ public:
 
 
 
+typedef vector<user_t>::iterator user_iter;
+
 class search_data {
-public:
-	vector<user_t>     userlist;     //list of user info (age, sex, etc)
-	vector<interest_t> interestlist; //list of interest maps
+	vector<user_t>    userlist;         // list of user info (age, sex, etc)
+	vector<interests> interestlist;     // interest -> list of userids
+//	vector<interests> userinterestlist; // userid -> list of interests
 
 	vector<userid_t> deluserlist; //list of user objs that are empty
 	vector<userid_t> usermap;   // user -> userid
@@ -180,12 +178,17 @@ public:
 
 	pthread_rwlock_t rwlock;    //read/write lock
 
+public:
 	search_data();
+	~search_data();
 
 	void fillRand(uint32_t count);
-	void fillSearchFile(char * filename, uint32_t max = 0);
+	void fillSearchFile(char * filename);
 	void fillSearchStdin();
 	void fillSearchUrl(char * url);
+	void fillSearchFd(FILE * input);
+
+	unsigned int size();
 
 	uint32_t setUser(const userid_t userid, const user_t user);
 	bool updateUser(user_update * upd);
@@ -206,8 +209,11 @@ public:
 	void searchUsers(search * srch);
 
 private:
+	void setInterest(userid_t index, uint32_t interest);
+	void unsetInterest(userid_t index, uint32_t interest);
+
 	inline char matchUser(const user_t & user, const search & srch);
-	userid_t parseBuf(char *buf);
+	userid_t parseUserBuf(char *buf);
 
 };
 

@@ -55,7 +55,7 @@ clean:
 #	rm -f *~
 
 tar: pristine
-	tar zcf $(DAEMON).tar.gz --exclude=search.txt --exclude=.svn *
+	tar zcf $(DAEMON).tar.gz --exclude=search.txt* --exclude=.svn *
 
 ship: tar
 	scp $(DAEMON).tar.gz master:/home/timo/

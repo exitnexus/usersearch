@@ -1,39 +1,51 @@
 
-#define NUM_INTEREST_BITS 320 //number of bits per userid
 
-#if 1
-//32 bit
-#define INTEREST_WORD_SIZE 32
-#define INTEREST_TYPE uint32_t
-#define INTEREST_SHIFT 5
-#define INTEREST_MASK 31
+#ifndef _INTERESTS_H_
+#define _INTERESTS_H_
 
-#else
-//64 bit
-#define INTEREST_WORD_SIZE 64
-#define INTEREST_TYPE uint64_t
-#define INTEREST_SHIFT 6
-#define INTEREST_MASK 63
+
+using namespace std;
+
+#include <vector>
+#include "search.h"
+
+typedef vector<userid_t>::iterator interest_iter;
+
+class interests {
+	vector<userid_t> userlist;
+
+public:
+//	interests();
+
+	void addUser(userid_t index){
+		userlist.push_back(index);
+	}
+
+	void deleteUser(userid_t index){
+//		userlist.remove(index);
+
+		interest_iter iit, iitend;
+
+		for(iit = userlist.begin(), iitend = userlist.end(); iit != iitend; iit++){
+			if(*iit == index){
+				*iit = userlist.back(); //replace with the last element
+				userlist.pop_back();    // (no need to shuffle all the elements down by one)
+			}
+		}
+	}
+
+	unsigned int size(void) const {
+		return userlist.size();
+	}
+
+	interest_iter begin(){
+		return userlist.begin();
+	}
+
+	interest_iter end(){
+		return userlist.end();
+	}
+};
 
 #endif
-
-#define INTEREST_WORDS NUM_INTEREST_BITS / INTEREST_WORD_SIZE //number of words of interests per user
-
-
-#define CHECK_INTEREST(userid, interestid) \
-	(( *(userinterestlist + (userid * INTEREST_WORDS) + (interestid >> INTEREST_SHIFT))) & (1 << (interestid & INTEREST_MASK)))
-
-#define SET_INTEREST(userid, interestid) \
-	( *(userinterestlist + ((userid) * INTEREST_WORDS) + ((interestid) >> INTEREST_SHIFT))) |= (1 << ((interestid) & INTEREST_MASK))
-
-#define UNSET_INTEREST(userid, interestid) \
-	( *(userinterestlist + ((userid) * INTEREST_WORDS) + ((interestid) >> INTEREST_SHIFT))) &= ~(1 << ((interestid) & INTEREST_MASK))
-
-#define CLEAR_INTEREST(userid) \
-	int clear_interest_counter; \
-	for(clear_interest_counter = 0; clear_interest_counter < INTEREST_WORDS; clear_interest_counter++) \
-		( *(userinterestlist + ((userid) * INTEREST_WORDS) + clear_interest_counter) = 0;
-
-
-
 
