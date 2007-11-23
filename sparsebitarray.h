@@ -44,13 +44,6 @@ public:
 		return numitems;
 	}
 
-	iterator begin(){
-		return iterator(rledata.begin());
-	}
-
-	iterator end(){
-		return iterator(rledata.end() - 1); //point to the last byte, which is a single byte block as a terminator
-	}
 
 private:
 	bool set(unsigned int index, unsigned int newval){
@@ -115,11 +108,11 @@ private:
 				newblocks.append(
 					block(
 						(1 - newval), //bit value
-						(index - (prev.value + runlength))
-						)
+						(index - (prev.value + prev.runlength))
+						).encode()
 					);
 			}
-			newblocks.append(block(newval, 1));
+			newblocks.append(block(newval, 1).encode());
 			
 			rledata.insert(rledata.size()-2, newblocks);
 			return true;
@@ -128,7 +121,7 @@ private:
 
 	//already set
 		if(cur.bitvalue == newval)
-			return false
+			return false;
 
 
 		
@@ -152,7 +145,7 @@ private:
 
 			newblocks = prev.encode() + cur.encode();
 
-			rledata.replace(pre.rledata, cur.rledata + cur.blocklength - 1, newblocks);
+			rledata.replace(prev.rledata, cur.rledata + cur.blocklength - 1, newblocks);
 
 			return true;
 		}
@@ -175,9 +168,9 @@ private:
 
 	//else
 	//	split block in 3
-		newblocks = block(cur.bitvalue, cur.value - index) +
-					block(newval, 1) +
-					block(cur.bitvalue, cur.value + cur.runlength - 1);
+		newblocks = block(cur.bitvalue, cur.value - index).encode() +
+					block(newval, 1).encode() +
+					block(cur.bitvalue, cur.value + cur.runlength - 1).encode();
 
 		rledata.replace(cur.rledata, cur.rledata + cur.blocklength - 1, newblocks);
 		return true;
@@ -256,18 +249,19 @@ private:
 		}
 	};
 
+public:
 
-	class iterator {
+	class SBAiterator {
 		block cur;
 		unsigned int progress;
 		
-		iterator(string::iterator rledata){
+	public:
+		SBAiterator(string::iterator rledata){
 			cur = block(rledata, 0);
 			progress = 0;
-			done = 0;
 		}
 
-		iterator(const iterator it){
+		SBAiterator(const sparse_bit_array::SBAiterator & it){
 			cur = it.cur;
 			progress = it.progress;
 		}
@@ -280,15 +274,15 @@ private:
 			return (cur.runlength == 0);
 		}
 
-		bool operator == (const iterator & rhs) const {
-			return (cur.value == rhs.cur.value && cur.progress == rhs.cur.progress);
+		bool operator == (const sparse_bit_array::SBAiterator & rhs) const {
+			return (cur.value == rhs.cur.value && progress == rhs.progress);
 		}
 
-		bool operator != (const iterator & rhs) const {
-			return !(this == rhs);
+		bool operator != (const sparse_bit_array::SBAiterator & rhs) const {
+			return !(cur.value == rhs.cur.value && progress == rhs.progress);
 		}
 
-		iterator operator ++(){ //prefix form
+		SBAiterator operator ++(){ //prefix form
 			progress++;
 
 		//move forward if
@@ -301,13 +295,24 @@ private:
 
 			return *this;
 		}
-
-		iterator operator ++(int){ //postfix form
-			iterator newit(this);
+/*
+		SBAiterator operator ++(int){ //postfix form
+			SBAiterator newit(*this);
 			++this;
 			return newit;
 		}
+*/
 	};
+	
+	SBAiterator begin(){
+		return SBAiterator(rledata.begin());
+	}
+
+	SBAiterator end(){
+		return SBAiterator(rledata.end() - 1); //point to the last byte, which is a single byte block as a terminator
+	}
+
+	
 };
 
 #endif
