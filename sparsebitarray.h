@@ -27,23 +27,57 @@ public:
 		rledata = "";
 	
 		rledata.append(block(0,1).encode());
-		rledata.append('\0'); //null terminate. \0 is equal to a 1 byte block of 0s of runlength 0
+		rledata.append(1, '\0'); //null terminate. \0 is equal to a 1 byte block of 0s of runlength 0
 
 		numitems = 0;
 	}
 
 	bool setbit(unsigned int index){
-		return set(index, 1);
+		bool ret = set(index, 1);
+		if(ret)
+			numitems++;
+		return ret;
 	}
 
 	bool unsetbit(unsigned int index){
-		return set(index, 0);
+		bool ret = set(index, 0);
+		if(ret)
+			numitems--;
+		return ret;
 	}
 
 	unsigned int size(void) const {
 		return numitems;
 	}
 
+	string printhex(){
+		string ret;
+		char buf[100];
+	
+		string::iterator it, end;
+		it = rledata.begin();
+		end = rledata.end();
+		
+		for(; it != end; it++){
+			sprintf(buf, "%02X ",(unsigned char) *it);
+			ret.append(buf);
+		}
+
+		return ret;
+	}
+
+	string print(){
+		string ret;
+		char buf[100];
+
+		for(SBAiterator it = begin(); !it.done(); ++it){
+			sprintf(buf, "%u ", *it);
+			ret.append(buf);
+		}
+
+		return ret;
+	
+	}
 
 private:
 	bool set(unsigned int index, unsigned int newval){
@@ -96,25 +130,27 @@ private:
 
 		
 	//at this point, cur will obviously always be set.
-	//prevblock is also always set, because of the head block of 0 set at offset 0
+	//prevblock is also always set, because of the head block of 0s set at offset 0
 	//this is always going to be true, since offset 0 is an illegal index to set
+	//this block may change in length, but will always exist
 
 
 	//got to the end without finding a block, create one or two
 		if(!cur.runlength){
-			newblocks = "";
 
-			if(prev.bitvalue == newval){ //need a separator block
-				newblocks.append(
-					block(
-						(1 - newval), //bit value
-						(index - (prev.value + prev.runlength))
-						).encode()
-					);
+			if(prev.bitvalue == newval){ //either extend or create a separator block and a new block
+				if(prev.value + prev.runlength == index){
+					prev.runlength++;
+					rledata.replace(prev.rledata, prev.rledata + prev.blocklength, prev.encode());
+				}else{
+					newblocks = block((1 - newval), (index - prev.value - prev.runlength)).encode() + block(newval, 1).encode();
+	
+					rledata.insert(rledata.size()-1, newblocks);
+				}
+			}else{ //extend the previous block and create a new block
+				newblocks = block(prev.bitvalue, (prev.runlength + index - prev.value - 1)).encode() + block(newval, 1).encode();
+				rledata.replace(prev.rledata, prev.rledata + prev.blocklength, newblocks);
 			}
-			newblocks.append(block(newval, 1).encode());
-			
-			rledata.insert(rledata.size()-2, newblocks);
 			return true;
 		}
 
@@ -132,7 +168,7 @@ private:
 
 			newblocks = block(newval, prev.runlength + 1 + next.runlength).encode();
 
-			rledata.replace(prev.rledata, next.rledata + next.blocklength - 1, newblocks);
+			rledata.replace(prev.rledata, next.rledata + next.blocklength, newblocks);
 			return true;
 		}
 
@@ -145,7 +181,7 @@ private:
 
 			newblocks = prev.encode() + cur.encode();
 
-			rledata.replace(prev.rledata, cur.rledata + cur.blocklength - 1, newblocks);
+			rledata.replace(prev.rledata, cur.rledata + cur.blocklength, newblocks);
 
 			return true;
 		}
@@ -156,23 +192,31 @@ private:
 		if(cur.value + cur.runlength - 1 == index){
 			next = cur.next();
 
-			cur.runlength--;
-			next.runlength++;
+			if(next.runlength == 0){ //setting last bit of the last block
+				cur.runlength--;
 
-			newblocks = cur.encode() + next.encode();
+				newblocks = cur.encode() + block(newval, 1).encode();
+				rledata.replace(cur.rledata, cur.rledata + cur.blocklength, newblocks);
+				return true;
+			}else{
+				cur.runlength--;
+				next.runlength++;
 
-			rledata.replace(cur.rledata, next.rledata + next.blocklength - 1, newblocks);
+				newblocks = cur.encode() + next.encode();
 
-			return true;
+				rledata.replace(cur.rledata, next.rledata + next.blocklength, newblocks);
+
+				return true;
+			}
 		}
 
 	//else
 	//	split block in 3
-		newblocks = block(cur.bitvalue, cur.value - index).encode() +
+		newblocks = block(cur.bitvalue, cur.value + cur.runlength - index + 1).encode() +
 					block(newval, 1).encode() +
-					block(cur.bitvalue, cur.value + cur.runlength - 1).encode();
+					block(cur.bitvalue, cur.value + cur.runlength - index - 1 ).encode();
 
-		rledata.replace(cur.rledata, cur.rledata + cur.blocklength - 1, newblocks);
+		rledata.replace(cur.rledata, cur.rledata + cur.blocklength, newblocks);
 		return true;
 	}
 
@@ -219,14 +263,14 @@ private:
 		string encode(){
 			string ret;
 
-			assert( bitvalue    >= 0 && bitvalue    <= 1);
-			assert( blocklength >= 1 && blocklength <= 4);
-			assert( runlength   >= 1 && runlength   <= ((1 << 29) - 1)); //max of 29 bits long
-
 			if(     runlength <= 0x00001F) blocklength = 1; // 5 bits of 1s
 			else if(runlength <= 0x001FFF) blocklength = 2; //13 bits of 1s
 			else if(runlength <= 0x1FFFFF) blocklength = 3; //21 bits of 1s
 			else                           blocklength = 4;
+
+			assert( bitvalue    >= 0 && bitvalue    <= 1);
+			assert( blocklength >= 1 && blocklength <= 4);
+			assert( runlength   >= 1 && runlength   <= ((1 << 29) - 1)); //max of 29 bits long
 
 			ret = string(blocklength, '\0');
 
@@ -259,6 +303,7 @@ public:
 		SBAiterator(string::iterator rledata){
 			cur = block(rledata, 0);
 			progress = 0;
+			++(*this);
 		}
 
 		SBAiterator(const sparse_bit_array::SBAiterator & it){
@@ -295,13 +340,13 @@ public:
 
 			return *this;
 		}
-/*
+
 		SBAiterator operator ++(int){ //postfix form
 			SBAiterator newit(*this);
-			++this;
+			++(*this);
 			return newit;
 		}
-*/
+
 	};
 	
 	SBAiterator begin(){
