@@ -144,7 +144,6 @@ private:
 					rledata.replace(prev.rledata, prev.rledata + prev.blocklength, prev.encode());
 				}else{
 					newblocks = block((1 - newval), (index - prev.value - prev.runlength)).encode() + block(newval, 1).encode();
-	
 					rledata.insert(rledata.size()-1, newblocks);
 				}
 			}else{ //extend the previous block and create a new block
@@ -212,7 +211,7 @@ private:
 
 	//else
 	//	split block in 3
-		newblocks = block(cur.bitvalue, cur.value + cur.runlength - index + 1).encode() +
+		newblocks = block(cur.bitvalue, index - cur.value).encode() +
 					block(newval, 1).encode() +
 					block(cur.bitvalue, cur.value + cur.runlength - index - 1 ).encode();
 
@@ -234,7 +233,7 @@ private:
 			blocklength = 0;
 			runlength = 0;
 		}
-		
+
 		block(unsigned int _bitvalue, unsigned int _runlength){
 			value = 0;
 			blocklength = 0;
@@ -279,10 +278,10 @@ private:
 			ret[0] |= ((blocklength - 1) << 5); //store block length. The -1 is to store 1-4 as 0-3 so it fits in 2 bits
 
 			switch(blocklength){
-				case 4: ret[3] |= ((runlength & (0x7F << 21)) >> 21);
-				case 3: ret[2] |= ((runlength & (0x7F << 13)) >> 13);
-				case 2: ret[1] |= ((runlength & (0x7F <<  5)) >>  5);
-				case 1: ret[0] |= ((runlength & (0x0F <<  0)) >>  0);
+				case 4: ret[3] |= ((runlength & (0xFF << 21)) >> 21);
+				case 3: ret[2] |= ((runlength & (0xFF << 13)) >> 13);
+				case 2: ret[1] |= ((runlength & (0xFF <<  5)) >>  5);
+				case 1: ret[0] |= ((runlength & (0x1F <<  0)) >>  0);
 			}
 
 			return ret;
@@ -328,7 +327,10 @@ public:
 		}
 
 		SBAiterator operator ++(){ //prefix form
-			progress++;
+//			assert(cur.runlength);
+
+			if(cur.runlength)
+				progress++;
 
 		//move forward if
 		//   this isn't the terminator block and
