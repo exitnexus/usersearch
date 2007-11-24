@@ -16,6 +16,7 @@ using namespace std;
  * - remainder of the block (varying between 5 bits and 29 bits) represents the run length
  **********/
 
+
 class sparse_bit_array {
 	string rledata;
 	unsigned int numitems; //number of successful sets - number of successful unsets
@@ -48,6 +49,10 @@ public:
 
 	unsigned int size(void) const {
 		return numitems;
+	}
+
+	unsigned int memsize(void) const {
+		return rledata.size();
 	}
 
 	string printhex(){
@@ -135,8 +140,10 @@ private:
 	//this block may change in length, but will always exist
 
 
-	//got to the end without finding a block, create one or two
+	//got to the end without finding a block
 		if(!cur.runlength){
+			if(newval == 0) //everything after the end is considered 0s anyway
+				return false;
 
 			if(prev.bitvalue == newval){ //either extend or create a separator block and a new block
 				if(prev.value + prev.runlength == index){
@@ -165,9 +172,15 @@ private:
 		if(cur.runlength == 1){
 			next = cur.next();
 
-			newblocks = block(newval, prev.runlength + 1 + next.runlength).encode();
+			if(next.runlength == 0){ //at the end, don't replace the next block as its the null terminator
+				newblocks = block(newval, prev.runlength + 1).encode();
 
-			rledata.replace(prev.rledata, next.rledata + next.blocklength, newblocks);
+				rledata.replace(prev.rledata, cur.rledata + cur.blocklength, newblocks);
+			}else{
+				newblocks = block(newval, prev.runlength + 1 + next.runlength).encode();
+
+				rledata.replace(prev.rledata, next.rledata + next.blocklength, newblocks);
+			}
 			return true;
 		}
 
@@ -361,6 +374,8 @@ public:
 
 	
 };
+
+typedef sparse_bit_array::SBAiterator sparse_bit_array_iter;
 
 #endif
 
