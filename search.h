@@ -67,7 +67,7 @@ typedef uint32_t userid_t;
 using namespace std;
 
 #include <vector>
-#include "interests.h"
+#include "interests2.h"
 
 
 
@@ -134,7 +134,7 @@ struct user_update {
 
 
 
-class search {
+class search_t {
 public:
 
 //criteria
@@ -206,13 +206,13 @@ public:
 	
 	void dumpSearchData(unsigned int max = 0);
 
-	void searchUsers(search * srch);
+	void searchUsers(search_t * srch);
 
 private:
 	void setInterest(userid_t index, uint32_t interest);
 	void unsetInterest(userid_t index, uint32_t interest);
 
-	inline char matchUser(const user_t & user, const search & srch);
+	inline char matchUser(const user_t & user, const search_t & srch);
 	userid_t parseUserBuf(char *buf);
 
 };

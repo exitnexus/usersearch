@@ -14,7 +14,7 @@ void print_array(sparse_bit_array & bitarray){
 
 
 int testbitarray(sparse_bit_array bitarray, char * expected, char * description){
-	printf("%s\n", description);
+//	
 
 	int ret = 0;
 
@@ -23,14 +23,18 @@ int testbitarray(sparse_bit_array bitarray, char * expected, char * description)
 	returned.erase(returned.size()-1, 1); //remove the trailing space
 
 	if(returned.compare(expected) != 0){
+		printf("%s\n", description);
 		printf("  Expected: '%s'\n", expected);
 		printf("  Got:      '%s'\n", returned.c_str());
+		printf("  Vals: %s\n", bitarray.print().c_str());
+		printf("\n");
 		ret = 1;
 	}else{
+/*		printf("%s\n", description);
 		printf("  Data: %s\n", returned.c_str());
-	}
-	printf("  Vals: %s\n", bitarray.print().c_str());
-	printf("\n");
+		printf("  Vals: %s\n", bitarray.print().c_str());
+		printf("\n");
+*/	}
 	
 	return ret;
 }
@@ -40,7 +44,7 @@ int main(){
 	sparse_bit_array bitarray;
 
 	int f = 0;
-
+//*
 	f += testbitarray(bitarray, "01 00", "init");
 
 	bitarray.setbit(5);
@@ -96,6 +100,10 @@ int main(){
 	f += testbitarray(bitarray, "04 86 03 81 01 81 0E 81 13 81 31 01 81 7B B0 C4 04 81 00",
 				"set 10000000 - add a high value");
 
+	bitarray.setbit(1);
+
+	f += testbitarray(bitarray, "01 81 02 86 03 81 01 81 0E 81 13 81 31 01 81 7B B0 C4 04 81 00",
+				"set 1 - check the low boundary condition");
 
 	bitarray = sparse_bit_array();
 
@@ -142,7 +150,7 @@ int main(){
 
 	f += testbitarray(bitarray, "0A 82 00",	"unset 4 - join blocks including first block");
 
-
+//*/
 
 	struct timeval start, finish;
 	unsigned int runtime;
@@ -152,11 +160,11 @@ int main(){
 
 	gettimeofday(&start, NULL);
 
-	for(i = 0, a = 1; i < 100000; i++){
-//		bitarray.setbit(rand() % 1000000 + 1);
+	for(i = 0, a = 1; i < 10000; i++){
+		bitarray.setbit(rand() % 1000000 + 1);
 
-		a += 2;// + rand() % 5;
-		bitarray.setbit(a);
+//		a += 2;// + rand() % 5;
+//		bitarray.setbit(a);
 	}
 
 	gettimeofday(&finish, NULL);
@@ -166,8 +174,9 @@ int main(){
 
 	gettimeofday(&start, NULL);
 
+	a = 1;
 	for(sparse_bit_array_iter iter = bitarray.begin(); !iter.done(); ++iter)
-		i = *iter;
+		a = *iter;
 
 	gettimeofday(&finish, NULL);
 

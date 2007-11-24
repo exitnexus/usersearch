@@ -33,8 +33,8 @@ struct global_data {
 	int popfd;
 	search_stats stats;
 	tqueue<user_update> * updates;
-	tqueue<search> * request;
-	tqueue<search> * response;
+	tqueue<search_t> * request;
+	tqueue<search_t> * response;
 	search_data * data;
 };
 
@@ -64,7 +64,7 @@ void signalfd(int fd){
 }
 
 void * searchRunner(thread_data_t * threaddata){
-	search * srch;
+	search_t * srch;
 	global_data * global = threaddata->global;
 
 	while(threaddata->state){
@@ -116,7 +116,7 @@ void * updateRunner(thread_data_t * threaddata){
 
 void handle_queue_searchresponse(int fd, short event, void *arg){
 	global_data * global = (global_data *) arg;
-	search * srch;
+	search_t * srch;
 
 	struct evbuffer *evb;
 
@@ -148,7 +148,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 
 	global->stats.search++;
 
-	search * srch = new search();
+	search_t * srch = new search_t();
 	const char * ptr;
 	struct evkeyvalq searchoptions;
 
@@ -424,12 +424,12 @@ void benchmarkSearch(global_data * global, unsigned int numsearches){
 	unsigned int i;
 	unsigned int found, returned;
 	unsigned int runtime;
-	search * srch;
+	search_t * srch;
 
 	gettimeofday(&start, NULL);
 
 	for(i = 0; i < numsearches; i++){
-		srch = new search();
+		srch = new search_t();
 		srch->rowcount = 25;
 		srch->random();
 
@@ -479,8 +479,8 @@ int main(int argc, char **argv){
 
 //3 queues
 	global->updates  = new tqueue<user_update>();
-	global->request  = new tqueue<search>();
-	global->response = new tqueue<search>();
+	global->request  = new tqueue<search_t>();
+	global->response = new tqueue<search_t>();
 
 //thread stuff
 	pthread_t thread[MAX_THREADS];

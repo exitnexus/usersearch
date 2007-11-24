@@ -5,7 +5,6 @@
 
 #include <vector>
 #include "search.h"
-#include "interests.h"
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -397,7 +396,7 @@ void search_data::fillRand(uint32_t count){
 
 
 
-inline char search_data::matchUser(const user_t & user, const search & srch){
+inline char search_data::matchUser(const user_t & user, const search_t & srch){
 	return 	user.age >= srch.agemin && user.age <= srch.agemax &&
 			(!srch.loc || user.loc == srch.loc) &&
 			(srch.sex == 2 || user.sex == srch.sex) &&
@@ -407,7 +406,7 @@ inline char search_data::matchUser(const user_t & user, const search & srch){
 			(!srch.sexuality || user.sexuality == srch.sexuality);
 }
 
-void search_data::searchUsers(search * srch){
+void search_data::searchUsers(search_t * srch){
 	unsigned int i;
 	user_iter uit, uitend;
 	interest_iter iit, iitend;
@@ -452,13 +451,13 @@ void search_data::searchUsers(search * srch){
 
 
 
-void search::print(){
+void search_t::print(){
 	printf("%u-%u,%s,%u,%u,%u,%u,%u\n",
 		agemin, agemax, (sex == 0 ? "Male" : sex == 1 ? "Female" : "Any"), 
 		loc, active, pic, single, sexuality);
 }
 
-void search::verbosePrint(){
+void search_t::verbosePrint(){
 	printf("Age: %u-%u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u, Searching: %u-%u\n",
 		agemin, agemax, (sex == 0 ? "Male" : sex == 1 ? "Female" : "Any"), 
 		loc, active, pic, single, sexuality, offset, offset+rowcount);
@@ -471,7 +470,7 @@ void search::verbosePrint(){
 	}
 }
 
-void search::random(){
+void search_t::random(){
 	loc = 0;//rand() % 300;
 	agemin = 14 + rand() % 50;
 	agemax = agemin + rand() % 15;
@@ -480,6 +479,8 @@ void search::random(){
 	pic = rand() % 3;
 	single = rand() % 2;
 	sexuality = rand() % 4;
+
+	interest = rand() % 300 + 1;
 
 	offset = 0;
 }

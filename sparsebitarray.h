@@ -27,7 +27,7 @@ class sparse_bit_array {
 public:
 	sparse_bit_array(){
 		rledata = "";
-	
+
 		rledata.append(block(0,1).encode());
 		rledata.append(1, '\0'); //null terminate. \0 is equal to a 1 byte block of 0s of runlength 0
 
@@ -103,7 +103,7 @@ private:
 	else if index is first of the block
 		shorten this block
 		lengthen the prev block
-	else if(index is last of the block
+	else if index is last of the block
 		shorten this block
 		lengthen next block
 	else
@@ -118,6 +118,8 @@ private:
 		block next;
 
 		string newblocks;
+		string::iterator start;
+		string::iterator end;
 
 	//find the right block
 		cur = block(rledata.begin(), 0);
@@ -137,95 +139,109 @@ private:
 	//this block may change in length, but will always exist
 
 
-	//got to the end without finding a block
-		if(!cur.runlength){
-			if(newval == 0) //everything after the end is considered 0s anyway
-				return false;
-
-			if(prev.bitvalue == newval){ //either extend or create a separator block and a new block
-				if(prev.value + prev.runlength == index){
-					prev.runlength++;
-					rledata.replace(prev.rledata, prev.rledata + prev.blocklength, prev.encode());
-				}else{
-					newblocks = block((1 - newval), (index - prev.value - prev.runlength)).encode() + block(newval, 1).encode();
-					rledata.insert(rledata.size()-1, newblocks);
-				}
-			}else{ //extend the previous block and create a new block
-				newblocks = block(prev.bitvalue, (prev.runlength + index - prev.value - 1)).encode() + block(newval, 1).encode();
-				rledata.replace(prev.rledata, prev.rledata + prev.blocklength, newblocks);
-			}
-			return true;
-		}
-
-
-	//already set
+	//already set, this includes setting 0s past the end of the string
 		if(cur.bitvalue == newval)
 			return false;
 
 
+	//got to the end without finding a block
+		if(!cur.runlength){
+			if(prev.bitvalue == newval){
+				if(prev.value + prev.runlength == index){
+				 //extend the previous block by one
+					prev.runlength++;
+
+					newblocks = prev.encode();
+
+					start = prev.rledata;
+					end   = prev.blockend();
+				}else{
+				//create a separator block and a new block
+					newblocks = block((1 - newval), (index - prev.value - prev.runlength)).encode() +
+					            block(newval, 1).encode();
+
+					start = cur.rledata;
+					end   = cur.rledata;
+				}
+			}else{
+			 //extend the previous block and create a new block
+				newblocks = block(prev.bitvalue, (prev.runlength + index - prev.value - 1)).encode() + 
+				            block(newval, 1).encode();
+
+				start = prev.rledata;
+				end = prev.blockend();
+			}
+		}
 
 	//if block runlength == 1
 	//	join prev and next blocks
-		if(cur.runlength == 1){
+		else if(cur.runlength == 1){
 			next = cur.next();
 
 			if(next.runlength == 0){ //at the end, don't replace the next block as its the null terminator
 				newblocks = block(newval, prev.runlength + 1).encode();
 
-				rledata.replace(prev.rledata, cur.rledata + cur.blocklength, newblocks);
+				start = prev.rledata;
+				end = cur.blockend();
 			}else{
 				newblocks = block(newval, prev.runlength + 1 + next.runlength).encode();
 
-				rledata.replace(prev.rledata, next.rledata + next.blocklength, newblocks);
+				start = prev.rledata;
+				end = next.blockend();
 			}
-			return true;
 		}
 
 	//else if index is first of the block
 	//	shorten this block
 	//	lengthen the prev block
-		if(cur.value == index){
+		else if(cur.value == index){
 			cur.runlength--;
 			prev.runlength++;
 
 			newblocks = prev.encode() + cur.encode();
 
-			rledata.replace(prev.rledata, cur.rledata + cur.blocklength, newblocks);
-
-			return true;
+			start = prev.rledata;
+			end = cur.blockend();
 		}
 
-	//else if(index is last of the block
+	//else if index is last of the block
 	//	shorten this block
 	//	lengthen next block
-		if(cur.value + cur.runlength - 1 == index){
+		else if(cur.value + cur.runlength - 1 == index){
 			next = cur.next();
 
 			if(next.runlength == 0){ //setting last bit of the last block
 				cur.runlength--;
 
-				newblocks = cur.encode() + block(newval, 1).encode();
-				rledata.replace(cur.rledata, cur.rledata + cur.blocklength, newblocks);
-				return true;
+				newblocks = cur.encode() + 
+				            block(newval, 1).encode();
+
+				start = cur.rledata;
+				end = cur.blockend();
 			}else{
 				cur.runlength--;
 				next.runlength++;
 
 				newblocks = cur.encode() + next.encode();
 
-				rledata.replace(cur.rledata, next.rledata + next.blocklength, newblocks);
-
-				return true;
+				start = cur.rledata;
+				end = next.blockend();
 			}
 		}
 
 	//else
 	//	split block in 3
-		newblocks = block(cur.bitvalue, index - cur.value).encode() +
-					block(newval, 1).encode() +
-					block(cur.bitvalue, cur.value + cur.runlength - index - 1 ).encode();
+		else {
+			newblocks = block(cur.bitvalue, index - cur.value).encode() +
+						block(newval, 1).encode() +
+						block(cur.bitvalue, cur.value + cur.runlength - index - 1 ).encode();
 
-		rledata.replace(cur.rledata, cur.rledata + cur.blocklength, newblocks);
+
+			start = cur.rledata;
+			end = cur.blockend();
+		}
+
+		rledata.replace(start, end, newblocks);
 		return true;
 	}
 
@@ -298,9 +314,13 @@ private:
 			return ret;
 		}
 
-		block next(){
-			return block(rledata + blocklength, value + runlength);
+		string::iterator blockend(){
+			return rledata + blocklength;
 		}
+
+		block next(){
+			return block(blockend(), value + runlength);
+		}		
 	};
 
 public:
