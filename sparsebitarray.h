@@ -7,6 +7,7 @@
 using namespace std;
 
 #include <string>
+#include <assert.h>
 
 /***********
  * The rledata is formed as a series of blocks. Each block has the format:
@@ -111,7 +112,6 @@ private:
 
 
 
-		unsigned int curindex = 0;
 
 		block cur;
 		block prev;
@@ -119,11 +119,8 @@ private:
 
 		string newblocks;
 
-		string::iterator ptr = rledata.begin();
-
-
 	//find the right block
-		cur = block(ptr, 0);
+		cur = block(rledata.begin(), 0);
 
 		while(cur.runlength){
 			if(cur.value + cur.runlength - 1 >= index) //found!
@@ -133,7 +130,7 @@ private:
 			cur = cur.next();
 		}
 
-		
+
 	//at this point, cur will obviously always be set.
 	//prevblock is also always set, because of the head block of 0s set at offset 0
 	//this is always going to be true, since offset 0 is an illegal index to set
@@ -166,7 +163,7 @@ private:
 			return false;
 
 
-		
+
 	//if block runlength == 1
 	//	join prev and next blocks
 		if(cur.runlength == 1){
@@ -262,13 +259,13 @@ private:
 			bitvalue    = ((*rledata & (1 << 7)) >> 7);     //grab the 7th bit
 			blocklength = ((*rledata & (3 << 5)) >> 5) + 1; //grab the 5th and 6th bit, +1 to give the full block length
 
-			runlength = 0;
+			runlength = *rledata & 0x1F;
 
 			switch(blocklength){ // acts as an unrolled loop
 				case 4: runlength |= ((*(rledata + 3) & 0xFF) << 21);
 				case 3: runlength |= ((*(rledata + 2) & 0xFF) << 13);
 				case 2: runlength |= ((*(rledata + 1) & 0xFF) <<  5);
-				case 1: runlength |= ((*(rledata    ) & 0x1F) <<  0);
+				case 1: break; //already decoded above
 			}
 		}
 
@@ -282,24 +279,25 @@ private:
 
 			assert( bitvalue    >= 0 && bitvalue    <= 1);
 			assert( blocklength >= 1 && blocklength <= 4);
-			assert( runlength   >= 1 && runlength   <= ((1 << 29) - 1)); //max of 29 bits long
+			assert( runlength   >= 1 && runlength   <= ((1 << 29) - 1)); //min of 1, max of 29 bits long
 
 			ret = string(blocklength, '\0');
 
 			ret[0] = 0;
 			ret[0] |= ((bitvalue & 1) << 7);    //store the bit value
 			ret[0] |= ((blocklength - 1) << 5); //store block length. The -1 is to store 1-4 as 0-3 so it fits in 2 bits
+			ret[0] |= runlength & 0x1F;         //store the first 5 bits of the run length 
 
 			switch(blocklength){
 				case 4: ret[3] |= ((runlength & (0xFF << 21)) >> 21);
 				case 3: ret[2] |= ((runlength & (0xFF << 13)) >> 13);
 				case 2: ret[1] |= ((runlength & (0xFF <<  5)) >>  5);
-				case 1: ret[0] |= ((runlength & (0x1F <<  0)) >>  0);
+				case 1: break;
 			}
 
 			return ret;
 		}
-		
+
 		block next(){
 			return block(rledata + blocklength, value + runlength);
 		}
@@ -310,8 +308,11 @@ public:
 	class SBAiterator {
 		block cur;
 		unsigned int progress;
-		
+
 	public:
+		SBAiterator(){
+		}
+
 		SBAiterator(string::iterator rledata){
 			cur = block(rledata, 0);
 			progress = 0;
@@ -336,7 +337,7 @@ public:
 		}
 
 		bool operator != (const sparse_bit_array::SBAiterator & rhs) const {
-			return !(cur.value == rhs.cur.value && progress == rhs.progress);
+			return !(*this == rhs);
 		}
 
 		SBAiterator operator ++(){ //prefix form
@@ -348,8 +349,8 @@ public:
 		//move forward if
 		//   this isn't the terminator block and
 		//   this is a block of 0s, or done walking this block of 1s
-			while(cur.runlength && (!cur.bitvalue || progress >= cur.runlength)){
-				cur = block(cur.rledata + cur.blocklength, cur.value + cur.runlength);
+			while(cur.runlength && (progress >= cur.runlength || !cur.bitvalue)){
+				cur = cur.next();
 				progress = 0;
 			}
 
