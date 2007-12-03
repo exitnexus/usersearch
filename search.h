@@ -67,7 +67,7 @@ typedef uint32_t userid_t;
 using namespace std;
 
 #include <vector>
-#include "interests2.h"
+#include "usersetbase.h"
 
 
 
@@ -91,7 +91,7 @@ struct user_t {
 #else
 
 struct user_t {
-	uint16_t loc;            // location id
+	uint16_t loc;
 	unsigned char age;       // age (14-60)
 	unsigned char sex;       // 0 : male, 1 : female
 	unsigned char active;    // 0 : inactive, 1 : active, 2 : online
@@ -138,14 +138,16 @@ class search_t {
 public:
 
 //criteria
-	uint16_t loc;
 	unsigned char agemin, agemax;
 	unsigned char sex;
 	unsigned char active;
 	unsigned char pic;
 	unsigned char single;
 	unsigned char sexuality;
-	uint32_t interest;
+	vector<uint32_t> locs; //any
+	vector<uint32_t> interests; //any/all?
+	bool allinterests;
+	vector<uint32_t> socials; //any
 
 //limits
 	unsigned int rowcount; // ie find 25 results
@@ -168,9 +170,13 @@ public:
 typedef vector<user_t>::iterator user_iter;
 
 class search_data {
-	vector<user_t>    userlist;         // list of user info (age, sex, etc)
-	vector<interests> interestlist;     // interest -> list of userids
-//	vector<interests> userinterestlist; // userid -> list of interests
+	vector<user_t>  userlist;      // list of user info (age, sex, etc)
+
+	vector<userset> loclist;       // location -> list of userids
+	vector<userset> interestlist;  // interest -> list of userids
+	vector<userset> sociallist;    // social circle -> list of userids
+
+//need reverse mappings so when a user is deleted, the list of locations, interests and social circles can be updated
 
 	vector<userid_t> deluserlist; //list of user objs that are empty
 	vector<userid_t> usermap;   // user -> userid

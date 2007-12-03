@@ -142,6 +142,28 @@ void handle_queue_searchresponse(int fd, short event, void *arg){
 	}
 }
 
+
+void parse_comma_list(vector<uint32_t> & list, const char * origstr){
+	char * newstr = strdup(origstr);
+	char * ptr, * next;
+	
+	ptr = newstr;
+
+	do{
+		next = strchr(ptr, ',');
+
+		if(next)
+			*next = '\0';
+
+		list.push_back(atoi(ptr));
+
+		ptr = next+1;
+	}while(next);
+
+	free(newstr);
+}
+
+
 //handles /search?...
 void handle_request_search(struct evhttp_request *req, void *arg){
 	global_data * global = (global_data *) arg;
@@ -158,7 +180,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 
 	srch->req = req;
 
-	srch->loc = 0;
+
 	srch->agemin = 14;
 	srch->agemax = 60;
 	srch->sex = 2;
@@ -166,7 +188,8 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	srch->pic = 1;
 	srch->single = 0;
 	srch->sexuality = 0;
-	srch->interest = 0;
+//	srch->loc = vector<uint32_t>;
+//	srch->interest = vector<uint32_t>;
 
 	srch->offset = 0;
 	srch->rowcount = 25;
@@ -175,12 +198,15 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "agemin")))    srch->agemin    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "agemax")))    srch->agemax    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "sex")))       srch->sex       = atoi(ptr);
-	if((ptr = evhttp_find_header(&searchoptions, "loc")))       srch->loc       = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "active")))    srch->active    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "pic")))       srch->pic       = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "single")))    srch->single    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) srch->sexuality = atoi(ptr);
-	if((ptr = evhttp_find_header(&searchoptions, "interest")))  srch->interest  = atoi(ptr);
+
+	if((ptr = evhttp_find_header(&searchoptions, "locs")))      parse_comma_list(srch->locs,      ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "interests"))) parse_comma_list(srch->interests, ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "socials")))   parse_comma_list(srch->socials,   ptr);
+
 	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
 
@@ -417,6 +443,10 @@ void handle_request_help(struct evhttp_request *req, void *arg){
 	evbuffer_free(evb);
 }
 
+void handle_request_shutdown(struct evhttp_request *req, void *arg){
+	exit(0);
+}
+
 void benchmarkSearch(global_data * global, unsigned int numsearches){
 	printf("Generating %u searches\n", numsearches);
 
@@ -631,6 +661,7 @@ int main(int argc, char **argv){
 
 	evhttp_set_cb(http, "/stats",      handle_request_stats,      global);
 	evhttp_set_cb(http, "/help",       handle_request_help,       NULL);
+	evhttp_set_cb(http, "/shutdown",   handle_request_shutdown,   NULL);
 
 	event_set(& updateEvent, global->popfd, EV_READ|EV_PERSIST, handle_queue_searchresponse, global);
 	event_add(& updateEvent, 0);

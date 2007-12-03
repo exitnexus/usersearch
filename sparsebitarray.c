@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 
-#include "sparsebitarray.h"
+#include "sparsebitarray2.h"
 #include <vector>
 #include <algorithm>
 
@@ -20,7 +20,7 @@ int testbitarray(sparse_bit_array bitarray, char * expected, char * description)
 
 	string returned = bitarray.printhex();
 
-	returned.erase(returned.size()-1, 1); //remove the trailing space
+	returned.erase(returned.size()-2, 2); //remove the trailing space
 
 	if(returned.compare(expected) != 0){
 		printf("%s\n", description);
@@ -30,11 +30,13 @@ int testbitarray(sparse_bit_array bitarray, char * expected, char * description)
 		printf("\n");
 		ret = 1;
 	}else{
-/*		printf("%s\n", description);
+/*
+		printf("%s\n", description);
 		printf("  Data: %s\n", returned.c_str());
 		printf("  Vals: %s\n", bitarray.print().c_str());
 		printf("\n");
-*/	}
+//*/
+	}
 	
 	return ret;
 }
@@ -105,6 +107,19 @@ int main(){
 	f += testbitarray(bitarray, "01 81 02 86 03 81 01 81 0E 81 13 81 31 01 81 7B B0 C4 04 81 00",
 				"set 1 - check the low boundary condition");
 
+
+	string output;
+	char buf[100];
+	for(sparse_bit_array_iter iter = bitarray.begin(); !iter.done(); ++iter){
+		sprintf(buf, "%u ", *iter);
+		output.append(buf);
+	}
+	
+	if(output != "1 4 5 6 7 8 9 13 15 30 50 100 10000000 "){
+		printf("Iter vals: %s\n", output.c_str());
+		f++;
+	}
+
 	bitarray = sparse_bit_array();
 
 	bitarray.setbit(5);
@@ -160,13 +175,16 @@ int main(){
 
 	gettimeofday(&start, NULL);
 
-	for(i = 0, a = 1; i < 10000; i++){
-		bitarray.setbit(rand() % 1000000 + 1);
-
+	for(i = 0, a = 1; i < 1000000; i++){
+		a = rand() % 100000 + 1;
 //		a += 2;// + rand() % 5;
-//		bitarray.setbit(a);
+		bitarray.setbit(a);
 	}
-
+/*	for(i = 100000, a = 200002; i > 0; i--){
+		a -= 2;// + rand() % 5;
+		bitarray.setbit(a);
+	}
+*/
 	gettimeofday(&finish, NULL);
 
 	runtime = ((finish.tv_sec*1000+finish.tv_usec/1000)-(start.tv_sec*1000+start.tv_usec/1000));
@@ -175,16 +193,22 @@ int main(){
 	gettimeofday(&start, NULL);
 
 	a = 1;
-	for(sparse_bit_array_iter iter = bitarray.begin(); !iter.done(); ++iter)
+	i = 0;
+	for(sparse_bit_array_iter iter = bitarray.begin(); !iter.done(); ++iter){
 		a = *iter;
+		i++;
+	}
 
 	gettimeofday(&finish, NULL);
 
 	runtime = ((finish.tv_sec*1000+finish.tv_usec/1000)-(start.tv_sec*1000+start.tv_usec/1000));
 	printf("Read time: %u ms\n", runtime);
 
+	printf("Elements read: %u\n", i);
 	printf("Elements: %u\n", bitarray.size());
 	printf("Memsize: %u\n", bitarray.memsize());
+	printf("Frame count: %u\n", bitarray.framecount());
+	printf("Frame split size: %u\n", bitarray.splitthreshhold);
 
 
 

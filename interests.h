@@ -1,7 +1,7 @@
 
 
-#ifndef _INTERESTS_H_
-#define _INTERESTS_H_
+#ifndef _USERSET_H_
+#define _USERSET_H_
 
 
 /**********************
@@ -14,13 +14,13 @@ using namespace std;
 
 #include <vector>
 
-typedef vector<uint32_t>::iterator interest_iter;
+typedef vector<uint32_t>::iterator userset_iter;
 
-class interests {
+class userset {
 	vector<uint32_t> userlist;
 
 public:
-//	interests();
+//	userset();
 
 	void addUser(uint32_t index){
 		userlist.push_back(index);
@@ -43,11 +43,11 @@ public:
 		return userlist.size();
 	}
 
-	interest_iter begin(){
+	userset_iter begin(){
 		return userlist.begin();
 	}
 
-	interest_iter end(){
+	userset_iter end(){
 		return userlist.end();
 	}
 };

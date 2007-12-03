@@ -15,6 +15,25 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+int fillibuf(const char * ptr, unsigned int * ibuf, unsigned int numints){
+	unsigned int found = 0;
+	unsigned int number = 0;
+
+	do{
+		while(*ptr >= '0' && *ptr <= '9'){
+			number *= 10;
+			number += *ptr - '0';
+			++ptr;
+		}
+
+		*ibuf = number;
+		++ibuf;
+		number = 0;
+		++found;
+	}while(found < numints && *ptr++ == ',');
+
+	return found;
+}
 
 search_data::search_data(){
 	pthread_rwlock_init(&rwlock, NULL);
@@ -113,18 +132,21 @@ unsigned int search_data::size(){
 uint32_t search_data::setUser(const userid_t userid, const user_t user){
 	uint32_t index = 0;
 
+	while(loclist.size() <= user.loc)
+		loclist.push_back( userset() );
+
 	pthread_rwlock_wrlock(&rwlock);
 
 	if(useridmap.size() > userid && useridmap[userid]){ //already exists, put it there
 		index = useridmap[userid];
-		
+
 		userlist[index] = user;
 		//assume usermap and useridmap are already correct
-	
+
 	}else if(deluserlist.size()){ //space exists from a previous user
 		index = deluserlist.back();
 		deluserlist.pop_back();
-	
+
 		userlist[index] = user;
 		usermap[index] = userid;
 
@@ -147,28 +169,22 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 		useridmap[userid] = index;
 	}
 
+	loclist[user.loc].addUser(index);
+
 	pthread_rwlock_unlock(&rwlock);
 
 	return index;
 }
 
 void search_data::setInterest(userid_t index, uint32_t interest){
-	pthread_rwlock_wrlock(&rwlock);
-
 	while(interestlist.size() <= interest)
-		interestlist.push_back( interests() );
+		interestlist.push_back( userset() );
 
 	interestlist[interest].addUser(index);
-
-	pthread_rwlock_unlock(&rwlock);
 }
 
 void search_data::unsetInterest(userid_t index, uint32_t interest){
-	pthread_rwlock_wrlock(&rwlock);
-
 	interestlist[interest].deleteUser(index);
-
-	pthread_rwlock_unlock(&rwlock);
 }
 
 bool search_data::updateUser(user_update * upd){
@@ -182,7 +198,11 @@ bool search_data::updateUser(user_update * upd){
 	index = useridmap[upd->userid];
 
 	switch(upd->field){
-		case UF_LOC:       userlist[index].loc       = upd->val; break;
+		case UF_LOC:
+			loclist[userlist[index].loc].deleteUser(upd->userid); //unset the previous
+			userlist[index].loc = upd->val;
+			loclist[userlist[index].loc].addUser(upd->userid);
+			break;
 		case UF_AGE:       userlist[index].age       = upd->val; break;
 		case UF_SEX:       userlist[index].sex       = upd->val; break;
 		case UF_ACTIVE:    userlist[index].active    = upd->val; break;
@@ -242,6 +262,7 @@ void search_data::fillSearchStdin(){
 
 void search_data::fillSearchFd(FILE * input){
 	char buf[256];
+	unsigned int ibuf[100];
 	uint32_t i = 0;
 
 	userid_t userid;
@@ -269,10 +290,14 @@ void search_data::fillSearchFd(FILE * input){
 	while(fgets(buf, sizeof(buf), input)){
 		i++;
 
-		if(2 != sscanf(buf, "%u,%u", & userid, & interestid)){
+		if(2 != fillibuf(buf, ibuf, 2)){
 			printf("Bad input file on line %u\n", i);
 			exit(1);
 		}
+
+		userid = ibuf[0];
+		interestid = ibuf[1];
+
 		if(useridmap[userid])
 			setInterest(useridmap[userid], interestid);
 	}
@@ -350,12 +375,25 @@ userid_t search_data::parseUserBuf(char *buf){
 	unsigned int single;
 	unsigned int sexuality;
 
+	unsigned int ibuf[100];
+
 	// id,userid,age,sex,loc,active,pic,single,sexualit
 	// 56,2080347,19,1,19,1,1,0,0
 
 //store in temp variables so that they can be full size
-	if(9 != sscanf(buf, "%u,%u,%u,%u,%u,%u,%u,%u,%u", & id, & userid, & age, & sex, & loc, & active, & pic, & single, & sexuality))
+
+	if(9 != fillibuf(buf, ibuf, 9))
 		return 0;
+
+	id        = ibuf[0];
+	userid    = ibuf[1];
+	age       = ibuf[2];
+	sex       = ibuf[3];
+	loc       = ibuf[4];
+	active    = ibuf[5];
+	pic       = ibuf[6];
+	single    = ibuf[7];
+	sexuality = ibuf[8];
 
 	//ignore id
 	user.age = age;
@@ -398,7 +436,6 @@ void search_data::fillRand(uint32_t count){
 
 inline char search_data::matchUser(const user_t & user, const search_t & srch){
 	return 	user.age >= srch.agemin && user.age <= srch.agemax &&
-			(!srch.loc || user.loc == srch.loc) &&
 			(srch.sex == 2 || user.sex == srch.sex) &&
 			user.active >= srch.active &&
 			user.pic    >= srch.pic    &&
@@ -407,37 +444,116 @@ inline char search_data::matchUser(const user_t & user, const search_t & srch){
 }
 
 void search_data::searchUsers(search_t * srch){
-	unsigned int i;
-	user_iter uit, uitend;
-	interest_iter iit, iitend;
 
 	srch->totalrows = 0;
 	srch->results.reserve(srch->rowcount);
 
+	unsigned int i;
+
+	userset::iterator uit, uitend;
+	vector<uint32_t>::iterator vit, vitend;
+
+	userset users;
+	userset temp;
+
+	bool uselist = false;
+
+//intersect the union of the locations above
+	if(srch->locs.size()){
+		vit    = srch->locs.begin();
+		vitend = srch->locs.end();
+
+		temp = loclist[*vit];
+		++vit;
+
+		for(; vit != vitend; ++vit)
+			temp.union_set(loclist[*vit]);
+
+		if(!uselist)
+			users = temp;
+		else
+			users.intersect_set(temp);
+
+		uselist = true;
+	}
+
+//intersect the union or intersection of the interests
+	if(srch->interests.size()){
+		vit    = srch->interests.begin();
+		vitend = srch->interests.end();
+
+		temp = interestlist[*vit];
+		++vit;
+
+		for(; vit != vitend; ++vit){
+			if(interestlist.size() > *vit){
+				if(srch->allinterests)
+					temp.union_set(interestlist[*vit]);
+				else
+					temp.intersect_set(interestlist[*vit]);
+			}
+		}
+
+		if(!uselist)
+			users = temp;
+		else
+			users.intersect_set(temp);
+
+		uselist = true;
+	}
+
+
+//intersect the union of the social circles
+	if(srch->socials.size()){
+		vit    = srch->socials.begin();
+		vitend = srch->socials.end();
+
+		temp = sociallist[*vit];
+		++vit;
+
+		for(; vit != vitend; ++vit)
+			temp.union_set(sociallist[*vit]);
+
+		if(!uselist)
+			users = temp;
+		else
+			users.intersect_set(temp);
+
+		uselist = true;
+	}
+
+//lock userlist
 	pthread_rwlock_rdlock(&rwlock);
 
-	if(srch->interest){
-		if(srch->interest < interestlist.size() && interestlist[srch->interest].size()){
-			for(iit = interestlist[srch->interest].begin(), iitend = interestlist[srch->interest].end(); iit != iitend; iit++){
-				if(matchUser(userlist[*iit], * srch)){
-					srch->totalrows++;
 
-					if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range
-						srch->results.push_back(usermap[*iit]); //append the userid to the results
-				}
+//limit to a subset of the users, as defined above
+	if(uselist){
+		uit = users.begin();
+		uitend = users.end();
+		for(; uit != uitend; uit++){
+			if(matchUser(userlist[*uit], * srch)){
+				srch->totalrows++;
+
+				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range
+					srch->results.push_back(usermap[*uit]); //append the userid to the results
 			}
 		}
 	}else{
-		for(i = 0, uit = userlist.begin(), uitend = userlist.end(); uit != uitend; uit++, i++){
-			if(matchUser(* uit, * srch)){
+//search over all users
+		vector<user_t>::iterator ulit = userlist.begin();
+		vector<user_t>::iterator ulitend = userlist.end();
+
+		for(i = 0; ulit != ulitend; ulit++, i++){
+			if(matchUser(* ulit, * srch)){
 				srch->totalrows++;
-	
+
 				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range
 					srch->results.push_back(usermap[i]); //append the userid to the results
 			}
 		}
 	}
-	
+
+//unlock userlist
 	pthread_rwlock_unlock(&rwlock);
 }
 
@@ -452,15 +568,15 @@ void search_data::searchUsers(search_t * srch){
 
 
 void search_t::print(){
-	printf("%u-%u,%s,%u,%u,%u,%u,%u\n",
+	printf("%u-%u,%s,%u,%u,%u,%u\n",
 		agemin, agemax, (sex == 0 ? "Male" : sex == 1 ? "Female" : "Any"), 
-		loc, active, pic, single, sexuality);
+		active, pic, single, sexuality);
 }
 
 void search_t::verbosePrint(){
-	printf("Age: %u-%u, Sex: %s, Loc: %u, Active: %u, Pic: %u, Single: %u, Sexuality: %u, Searching: %u-%u\n",
+	printf("Age: %u-%u, Sex: %s, Active: %u, Pic: %u, Single: %u, Sexuality: %u, Searching: %u-%u\n",
 		agemin, agemax, (sex == 0 ? "Male" : sex == 1 ? "Female" : "Any"), 
-		loc, active, pic, single, sexuality, offset, offset+rowcount);
+		active, pic, single, sexuality, offset, offset+rowcount);
 
 	if(results.size()){
 		printf("Results: %u of %u: ", (unsigned int)results.size(), totalrows);
@@ -471,7 +587,6 @@ void search_t::verbosePrint(){
 }
 
 void search_t::random(){
-	loc = 0;//rand() % 300;
 	agemin = 14 + rand() % 50;
 	agemax = agemin + rand() % 15;
 	sex = rand() % 3;
@@ -480,7 +595,11 @@ void search_t::random(){
 	single = rand() % 2;
 	sexuality = rand() % 4;
 
-	interest = rand() % 300 + 1;
+	for(int i = rand() % 20; i >= 0; i--)
+		locs.push_back((rand() % 300) + 1);
+
+
+//	interests = rand() % 300 + 1;
 
 	offset = 0;
 }

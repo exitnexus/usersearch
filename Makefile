@@ -33,6 +33,10 @@ else
 	CFLAGS		+= -O3
 endif
 
+ifdef PROFILE
+	CFLAGS		+= -pg
+endif
+
 all : $(DAEMON)
 
 libevent/% : 
@@ -55,7 +59,10 @@ clean:
 #	rm -f *~
 
 tar: pristine
-	tar zcf $(DAEMON).tar.gz --exclude=search.txt* --exclude=.svn *
+	tar zcf $(DAEMON).tar.gz --exclude=search.txt* --exclude=.svn --exclude=callgrind.* *
 
 ship: tar
 	scp $(DAEMON).tar.gz master:/home/timo/
+
+fresh: clean all
+
