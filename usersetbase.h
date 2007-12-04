@@ -98,7 +98,7 @@ public:
 #ifdef USERSET_VEC
 
 		iterator loc = lower_bound(userlist.begin(), userlist.end(), val);
-		if(loc != userlist.end() && *loc != val)
+		if(loc == userlist.end() || *loc != val)
 			userlist.insert(loc, val);
 
 #else //USERSET_SET
