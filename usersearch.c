@@ -451,7 +451,7 @@ void benchmarkSearch(global_data * global, unsigned int numsearches){
 	printf("Generating %u searches\n", numsearches);
 
 	struct timeval start, finish;
-	unsigned int i;
+	unsigned int i, next;
 	unsigned int found, returned;
 	unsigned int runtime;
 	search_t * srch;
@@ -472,14 +472,18 @@ void benchmarkSearch(global_data * global, unsigned int numsearches){
 	printf("Counting %u searches\n", numsearches);
 
 	found = returned = 0;
-
-	for(i = 0; i < numsearches; i++){
+	next = numsearches/10;
+	for(i = 1; i <= numsearches; i++){
 		srch = global->response->pop();
 
 //		srch->verbosePrint();
 
 		found    += srch->totalrows;
 		returned += srch->results.size();
+		if(i == next){
+			printf("%u\n", i);
+			next += numsearches/10;
+		}
 	}
 
 	gettimeofday(&finish, NULL);
@@ -499,6 +503,7 @@ int main(int argc, char **argv){
 	unsigned int numthreads;
 	unsigned int benchruns;
 	unsigned int port;
+	struct timeval start, finish;
 
 	global_data * global = new global_data;
 
@@ -590,6 +595,9 @@ int main(int argc, char **argv){
 
 
 	printf("Loading user data ... ");
+
+	gettimeofday(&start, NULL);
+
 	if(load_loc[0] == '-')
 		global->data->fillSearchStdin();
 	else if(strlen(load_loc) > 7 && strncmp("http://", load_loc, 7) == 0)
@@ -599,7 +607,12 @@ int main(int argc, char **argv){
 	else
 		global->data->fillSearchFile(load_loc);
 
+	gettimeofday(&finish, NULL);
+
 	printf("%u users loaded\n", (unsigned int) global->data->size());
+
+	printf("Loading users took: %u ms\n", (unsigned int) ((finish.tv_sec*1000+finish.tv_usec/1000)-(start.tv_sec*1000+start.tv_usec/1000)));
+
 
 //	data->dumpSearchData(10);
 
