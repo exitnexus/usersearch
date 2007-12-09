@@ -15,7 +15,7 @@ struct iterpair {
 		itend = _itend;
 	}
 
-	iterator(const iterpair & _it){
+	iterpair(const iterpair<T> & _it){
 		it = _it.it;
 		itend = _it.itend;
 	}
@@ -27,10 +27,11 @@ struct iterpair {
 	void operator ++(){ //prefix form
 		++it;
 	}
+
 	void operator ++(int){ //prefix form
 		++it;
 	}
-}
+};
 
 
 #endif

@@ -9,7 +9,7 @@
  *
  **********************/
 
-
+#include "iterpair.h"
 
 #define USERSET_VEC 1
 //#define USERSET_SET 1
@@ -40,10 +40,8 @@ public:
 
 #ifdef USERSET_VEC
 	typedef vector<index_type> settype;
-#define INSERTER(list) back_inserter(list)
 #else
 	typedef set<index_type> settype;
-#define INSERTER(list) inserter(list, list.begin())
 #endif
 
 
@@ -151,6 +149,14 @@ public:
 		combine(true, other);
 	}
 
+	void union_set(vector<userset> & others){
+		combine(false, others);
+	}
+
+	void intersect_set(vector<userset> & others){
+		combine(true, others);
+	}
+
 	iterator begin(){
 		return userlist.begin();
 	}
@@ -162,21 +168,33 @@ public:
 private:
 	void combine(bool intersect, userset & other){
 		settype newlist;
+		index_type * itend;
 
 #ifdef USERSET_VEC
 		if(intersect)
-			newlist.reserve(min(userlist.size(), other.userlist.size()));
+			newlist.resize(min(userlist.size(), other.userlist.size()));
 		else
-			newlist.reserve(userlist.size() + other.userlist.size());
+			newlist.resize(userlist.size() + other.userlist.size());
+
+//use &* to get a real pointer instead of an iterator. This makes it mildly faster
+#define INSERTER(list) &*list.begin()
+
+#else
+#define INSERTER(list) inserter(list, list.begin())
 #endif
+
 
 		readlock();
 		other.readlock();
 
 		if(intersect)
-			set_intersection(userlist.begin(), userlist.end(), other.begin(), other.end(), INSERTER(newlist));
+			itend = set_intersection(userlist.begin(), userlist.end(), other.begin(), other.end(), INSERTER(newlist));
 		else
-			set_union(userlist.begin(), userlist.end(), other.begin(), other.end(), INSERTER(newlist));
+			itend = set_union(userlist.begin(), userlist.end(), other.begin(), other.end(), INSERTER(newlist));
+
+#ifdef USERSET_VEC
+		newlist.resize(itend - &*newlist.begin());
+#endif
 
 		other.unlock();
 		unlock();
@@ -184,6 +202,83 @@ private:
 		writelock();
 		userlist.swap(newlist);
 		unlock();
+	}
+
+	void combine(bool intersect, vector<userset> & lists){
+		settype newlist;
+
+		vector <iterpair <userset::iterator> > its;
+
+		vector <iterpair <userset::iterator> >::iterator it;
+		vector <iterpair <userset::iterator> >::iterator itend;
+
+		vector<userset>::iterator listit = lists.begin();
+		vector<userset>::iterator listitend = lists.end();
+		
+		for(; listit != listitend; ++listit)
+			its.push_back(iterpair<userset::iterator>(listit->begin(), listit->end()));
+
+		it = its.begin();
+		itend = its.end();
+
+		index_type cur;
+
+		if(intersect){
+
+			unsigned int numlists = its.size();
+			unsigned int found = 1;
+
+			it = its.begin();
+			cur = 0;
+
+			while(1){
+				while(it->it != it->itend && *(it->it) < cur) //find it in this set
+					++(*it);
+
+				if(it->it == it->itend) //one of them reached the end, no chance of matching anymore
+					break;
+
+				if(*(it->it) == cur){
+					found++;
+
+					if(found == numlists){ //exists in all sets
+						newlist.push_back(cur);
+						++(*it);
+
+						if(it->it == it->itend)
+							break;
+
+						cur = *(it->it);
+						found = 1;						
+					}
+				}else{
+					cur = *(it->it);
+					found = 1;
+				}
+
+				++it; //check the next set
+			}
+		}else{
+			while(1){
+				cur = 0;
+
+			//find the next smallest	
+				for(it = its.begin(); it != itend; ++it)
+					if(it->it != it->itend && (cur == 0 || *(it->it) < cur))
+						cur = *(it->it);
+
+			//found one, save it and increment all sets that had it
+				if(cur){
+					newlist.push_back(cur);
+
+					for(it = its.begin(); it != itend; ++it)
+						if(it->it != it->itend && *(it->it) == cur)
+							++(*it);
+				}else{
+					break;
+				}
+			}
+		}
 	}
 
 	void readlock() const{
