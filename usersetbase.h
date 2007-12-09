@@ -28,7 +28,6 @@ using namespace std;
 #include <set>
 #endif
 
-
 #include <algorithm>
 
 
@@ -90,6 +89,10 @@ public:
 		return *this;
 	}
 
+	bool operator == ( const userset & other){
+		return (userlist == other.userlist);
+	}
+
 	void addUser(index_type val){
 		writelock();
 
@@ -149,11 +152,11 @@ public:
 		combine(true, other);
 	}
 
-	void union_set(vector<userset> & others){
+	void union_set(vector<userset *> & others){
 		combine(false, others);
 	}
 
-	void intersect_set(vector<userset> & others){
+	void intersect_set(vector<userset *> & others){
 		combine(true, others);
 	}
 
@@ -204,7 +207,7 @@ private:
 		unlock();
 	}
 
-	void combine(bool intersect, vector<userset> & lists){
+	void combine(bool intersect, vector<userset *> & lists){
 		settype newlist;
 
 		vector <iterpair <userset::iterator> > its;
@@ -212,11 +215,26 @@ private:
 		vector <iterpair <userset::iterator> >::iterator it;
 		vector <iterpair <userset::iterator> >::iterator itend;
 
-		vector<userset>::iterator listit = lists.begin();
-		vector<userset>::iterator listitend = lists.end();
-		
-		for(; listit != listitend; ++listit)
-			its.push_back(iterpair<userset::iterator>(listit->begin(), listit->end()));
+		vector<userset *>::iterator listit = lists.begin();
+		vector<userset *>::iterator listitend = lists.end();
+
+		readlock();
+
+		unsigned int totalsize = size();
+		unsigned int maxsize = size();
+
+
+		its.push_back(iterpair<userset::iterator>(begin(), end()));
+
+		for(; listit != listitend; ++listit){
+			(**listit).readlock();
+
+			totalsize += (**listit).size();
+			if(maxsize < (**listit).size())
+				maxsize = (**listit).size();
+
+			its.push_back(iterpair<userset::iterator>((**listit).begin(), (**listit).end()));
+		}
 
 		it = its.begin();
 		itend = its.end();
@@ -225,8 +243,10 @@ private:
 
 		if(intersect){
 
+			newlist.reserve(maxsize);
+
 			unsigned int numlists = its.size();
-			unsigned int found = 1;
+			unsigned int found = 0;
 
 			it = its.begin();
 			cur = 0;
@@ -257,8 +277,13 @@ private:
 				}
 
 				++it; //check the next set
+				if(it == its.end())
+					it = its.begin();
 			}
 		}else{
+		
+			newlist.reserve(totalsize);
+		
 			while(1){
 				cur = 0;
 
@@ -279,6 +304,16 @@ private:
 				}
 			}
 		}
+		
+		
+		unlock();
+
+		for(; listit != listitend; ++listit)
+			(**listit).unlock();
+
+		writelock();
+		userlist.swap(newlist);
+		unlock();
 	}
 
 	void readlock() const{
