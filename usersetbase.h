@@ -179,6 +179,9 @@ private:
 		else
 			newlist.resize(userlist.size() + other.userlist.size());
 
+		if(newlist.size() == 0)
+			return;
+
 //use &* to get a real pointer instead of an iterator. This makes it mildly faster
 #define INSERTER(list) &*list.begin()
 
@@ -209,6 +212,7 @@ private:
 
 	void combine(bool intersect, vector<userset *> & lists){
 		settype newlist;
+		index_type * newit;
 
 		vector <iterpair <userset::iterator> > its;
 
@@ -221,7 +225,7 @@ private:
 		readlock();
 
 		unsigned int totalsize = size();
-		unsigned int maxsize = size();
+		unsigned int minsize = size();
 
 
 		its.push_back(iterpair<userset::iterator>(begin(), end()));
@@ -230,8 +234,8 @@ private:
 			(**listit).readlock();
 
 			totalsize += (**listit).size();
-			if(maxsize < (**listit).size())
-				maxsize = (**listit).size();
+			if(minsize > (**listit).size())
+				minsize = (**listit).size();
 
 			its.push_back(iterpair<userset::iterator>((**listit).begin(), (**listit).end()));
 		}
@@ -243,15 +247,30 @@ private:
 
 		if(intersect){
 
-			newlist.reserve(maxsize);
+	//intersect!!!!
+	
+			if(minsize == 0)
+				return;
+
+	
+			newlist.resize(minsize);
+			newit = & *newlist.begin();
 
 			unsigned int numlists = its.size();
 			unsigned int found = 0;
+			unsigned int skip = 0;
 
 			it = its.begin();
 			cur = 0;
 
+			skip = 10;//numlists/4;
+
 			while(1){
+
+			//skip ahead more quickly, sometimes helpful, sometimes not...
+				while((it->it) + skip < it->itend && *((it->it) + skip) < cur) //find it in this set
+					it->it += skip + 1;
+
 				while(it->it != it->itend && *(it->it) < cur) //find it in this set
 					++(*it);
 
@@ -262,7 +281,9 @@ private:
 					found++;
 
 					if(found == numlists){ //exists in all sets
-						newlist.push_back(cur);
+						*newit = cur;
+						++newit;
+
 						++(*it);
 
 						if(it->it == it->itend)
@@ -281,37 +302,68 @@ private:
 					it = its.begin();
 			}
 		}else{
-		
-			newlist.reserve(totalsize);
+
+	//union!!!!
+
+			if(totalsize == 0)
+				return;
+
+			newlist.resize(totalsize);
+			newit = & *newlist.begin();
+
+			it = its.begin(); 
+			while(it != its.end()){
+				if(it->it == it->itend){
+					it = its.erase(it);
+					continue;
+				}
+				++it;
+			}
+
 		
 			while(1){
-				cur = 0;
 
-			//find the next smallest	
-				for(it = its.begin(); it != itend; ++it)
-					if(it->it != it->itend && (cur == 0 || *(it->it) < cur))
+			//find the next smallest
+				it = its.begin();
+				cur = *(it->it);
+
+				for(++it; it != its.end(); ++it)
+					if(*(it->it) < cur)
 						cur = *(it->it);
 
 			//found one, save it and increment all sets that had it
-				if(cur){
-					newlist.push_back(cur);
+				*newit = cur;
+				++newit;					
 
-					for(it = its.begin(); it != itend; ++it)
-						if(it->it != it->itend && *(it->it) == cur)
-							++(*it);
-				}else{
-					break;
+				it = its.begin();
+				while(it != its.end()){
+					if(*(it->it) == cur){
+						++(*it);
+
+						if(it->it == it->itend){
+							it = its.erase(it);
+							continue;
+						}
+					}
+					++it;
 				}
+				if(its.size() == 0)
+					break;
 			}
 		}
-		
-		
+
+
 		unlock();
 
 		for(; listit != listitend; ++listit)
 			(**listit).unlock();
 
 		writelock();
+
+#ifdef USERSET_VEC
+		newlist.resize(newit - &*newlist.begin());
+#endif
+
 		userlist.swap(newlist);
 		unlock();
 	}
