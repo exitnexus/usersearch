@@ -142,25 +142,18 @@ void handle_queue_searchresponse(int fd, short event, void *arg){
 	}
 }
 
-
-void parse_comma_list(vector<uint32_t> & list, const char * origstr){
-	char * newstr = strdup(origstr);
-	char * ptr, * next;
-	
-	ptr = newstr;
+void parse_comma_list(vector<uint32_t> & list, const char * ptr){
+	unsigned int number = 0;
 
 	do{
-		next = strchr(ptr, ',');
+		while(*ptr >= '0' && *ptr <= '9'){
+			number *= 10;
+			number += *ptr - '0';
+			++ptr;
+		}
 
-		if(next)
-			*next = '\0';
-
-		list.push_back(atoi(ptr));
-
-		ptr = next+1;
-	}while(next);
-
-	free(newstr);
+		list.push_back(number);
+	}while(*ptr++ == ',');
 }
 
 
