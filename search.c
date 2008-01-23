@@ -460,14 +460,14 @@ void search_data::searchUsers(search_t * srch){
 
 //intersect the union of the locations above
 	if(srch->locs.size()){
+		temp = userset(); //reset to empty
+
 		vit    = srch->locs.begin();
 		vitend = srch->locs.end();
-
-		temp = loclist[*vit];
-		++vit;
-
+	
 		for(; vit != vitend; ++vit)
-			temp.union_set(loclist[*vit]);
+			if(*vit < loclist.size()) //if searching for a location not yet defined, skip it
+				temp.union_set(loclist[*vit]);
 
 		if(!uselist)
 			users = temp;
@@ -479,18 +479,26 @@ void search_data::searchUsers(search_t * srch){
 
 //intersect the union or intersection of the interests
 	if(srch->interests.size()){
+		temp = userset(); //reset to empty
+
 		vit    = srch->interests.begin();
 		vitend = srch->interests.end();
 
-		temp = interestlist[*vit];
-		++vit;
-
 		for(; vit != vitend; ++vit){
-			if(interestlist.size() > *vit){
-				if(srch->allinterests)
+			if(srch->allinterests){ //union
+				if(*vit < interestlist.size()) // if undefined, skip
 					temp.union_set(interestlist[*vit]);
-				else
-					temp.intersect_set(interestlist[*vit]);
+			}else{ //intersect
+				if(vit == srch->interests.begin()){ //need to initialize the set
+					if(*vit < interestlist.size()
+						temp = interestlist[*vit]);
+					//if undefined, keep the already empty set
+				}else{
+					if(*vit < interestlist.size())
+						temp = userset();  //if undefined, intersection leads to an empty set
+					else
+						temp.intersect_set(interestlist[*vit]);
+				}
 			}
 		}
 
@@ -505,14 +513,15 @@ void search_data::searchUsers(search_t * srch){
 
 //intersect the union of the social circles
 	if(srch->socials.size()){
+		temp = userset(); //reset to empty
+
 		vit    = srch->socials.begin();
 		vitend = srch->socials.end();
 
-		temp = sociallist[*vit];
-		++vit;
 
 		for(; vit != vitend; ++vit)
-			temp.union_set(sociallist[*vit]);
+			if(*vit < sociallist.size()) //if searching for an undefined social list, skip it
+				temp.union_set(sociallist[*vit]);
 
 		if(!uselist)
 			users = temp;
