@@ -491,7 +491,7 @@ void search_data::searchUsers(search_t * srch){
 			}else{ //intersect
 				if(vit == srch->interests.begin()){ //need to initialize the set
 					if(*vit < interestlist.size())
-						temp = interestlist[*vit]);
+						temp = interestlist[*vit];
 					//if undefined, keep the already empty set
 				}else{
 					if(*vit < interestlist.size())
