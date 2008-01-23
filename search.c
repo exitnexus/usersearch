@@ -485,12 +485,12 @@ void search_data::searchUsers(search_t * srch){
 		vitend = srch->interests.end();
 
 		for(; vit != vitend; ++vit){
-			if(srch->allinterests){ //union
+			if(!srch->allinterests){ //union
 				if(*vit < interestlist.size()) // if undefined, skip
 					temp.union_set(interestlist[*vit]);
 			}else{ //intersect
 				if(vit == srch->interests.begin()){ //need to initialize the set
-					if(*vit < interestlist.size()
+					if(*vit < interestlist.size())
 						temp = interestlist[*vit]);
 					//if undefined, keep the already empty set
 				}else{
