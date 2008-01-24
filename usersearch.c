@@ -143,9 +143,10 @@ void handle_queue_searchresponse(int fd, short event, void *arg){
 }
 
 void parse_comma_list(vector<uint32_t> & list, const char * ptr){
-	unsigned int number = 0;
+	unsigned int number;
 
 	do{
+		number = 0;
 		while(*ptr >= '0' && *ptr <= '9'){
 			number *= 10;
 			number += *ptr - '0';
@@ -254,24 +255,19 @@ void push_update(global_data * global, userid_t userid, userfield field, uint32_
 	global->updates->push(upd);
 }
 
-void push_update_interest(global_data * global, userid_t userid, userfield field, const char * origstr){
-	char * newstr = strdup(origstr);
-	char * ptr, * next;
-	
-	ptr = newstr;
+void push_update_interest(global_data * global, userid_t userid, userfield field, const char * ptr){
+	unsigned int number;
 
 	do{
-		next = strchr(ptr, ',');
+		number = 0;
+		while(*ptr >= '0' && *ptr <= '9'){
+			number *= 10;
+			number += *ptr - '0';
+			++ptr;
+		}
 
-		if(next)
-			*next = '\0';
-
-		push_update(global, userid, field, atoi(ptr));
-
-		ptr = next+1;
-	}while(next);
-
-	free(newstr);
+		push_update(global, userid, field, number);
+	}while(*ptr++ == ',');
 }
 
 //handles /updateuser?userid=<userid>&age=<age>&....
