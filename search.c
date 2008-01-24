@@ -37,6 +37,11 @@ int fillibuf(const char * ptr, unsigned int * ibuf, unsigned int numints){
 
 search_data::search_data(){
 	pthread_rwlock_init(&rwlock, NULL);
+
+//add a null user that is skipped in the search, so that useridmap[0] being 0 means no user
+	userlist.push_back(user_t());
+	usermap.push_back(0);
+	useridmap.push_back(0);
 }
 
 search_data::~search_data(){
@@ -116,11 +121,11 @@ void search_data::dumpSearchData(unsigned int max){
 	unsigned int i, size;
 
 	size = userlist.size();
-	max = (max && max < size ? max : size);
+	max = (max && max+1 < size ? max+1 : size); //+1 to skip the first user, which is a null user
 
 	printf("Dumping %u of %u users\n", max, size);
 
-	for(i = 0; i < max; i++)
+	for(i = 1; i < max; i++)
 		printUser(usermap[i], & userlist[i]);
 }
 
@@ -150,7 +155,7 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 		userlist[index] = user;
 		usermap[index] = userid;
 
-		while(useridmap.size() < userid)
+		while(useridmap.size() <= userid)
 			useridmap.push_back(0);
 
 		useridmap[userid] = index;
@@ -163,7 +168,7 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 		userlist.push_back(user);
 		usermap.push_back(userid);
 
-		while(useridmap.size() < userid)
+		while(useridmap.size() <= userid)
 			useridmap.push_back(0);
 
 		useridmap[userid] = index;
@@ -176,21 +181,24 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 	return index;
 }
 
-void search_data::setInterest(userid_t index, uint32_t interest){
-	while(interestlist.size() <= interest)
-		interestlist.push_back( userset() );
-
-	interestlist[interest].addUser(index);
+void search_data::setInterest(userid_t userid, uint32_t interest){
+	if(useridmap.size() > userid && useridmap[userid]){
+		while(interestlist.size() <= interest)
+			interestlist.push_back( userset() );
+	
+		interestlist[interest].addUser(useridmap[userid]);
+	}
 }
 
-void search_data::unsetInterest(userid_t index, uint32_t interest){
-	interestlist[interest].deleteUser(index);
+void search_data::unsetInterest(userid_t userid, uint32_t interest){
+	if(useridmap.size() > userid && useridmap[userid])
+		interestlist[interest].deleteUser(useridmap[userid]);
 }
 
 bool search_data::updateUser(user_update * upd){
 	uint32_t index;
 
-	if(useridmap.size() < upd->userid || !useridmap[upd->userid]) //doesn't exist, can't update
+	if(useridmap.size() <= upd->userid || !useridmap[upd->userid]) //doesn't exist, can't update
 		return false;
 
 	pthread_rwlock_wrlock(&rwlock);
@@ -209,8 +217,8 @@ bool search_data::updateUser(user_update * upd){
 		case UF_PIC:       userlist[index].pic       = upd->val; break;
 		case UF_SINGLE:    userlist[index].single    = upd->val; break;
 		case UF_SEXUALITY: userlist[index].sexuality = upd->val; break;
-		case UF_ADD_INTEREST:   setInterest(index, upd->val);    break;
-		case UF_DEL_INTEREST: unsetInterest(index, upd->val);    break;
+		case UF_ADD_INTEREST:   setInterest(upd->userid, upd->val); break;
+		case UF_DEL_INTEREST: unsetInterest(upd->userid, upd->val); break;
 	}
 
 	pthread_rwlock_unlock(&rwlock);
@@ -221,7 +229,7 @@ bool search_data::updateUser(user_update * upd){
 bool search_data::delUser(userid_t userid){
 	uint32_t index = 0;
 	
-	if(useridmap.size() < userid || !useridmap[userid]) //doesn't exist
+	if(useridmap.size() <= userid || !useridmap[userid]) //doesn't exist
 		return false;
 
 	pthread_rwlock_wrlock(&rwlock);
@@ -298,8 +306,7 @@ void search_data::fillSearchFd(FILE * input){
 		userid = ibuf[0];
 		interestid = ibuf[1];
 
-		if(useridmap[userid])
-			setInterest(useridmap[userid], interestid);
+		setInterest(userid, interestid);
 	}
 }
 
@@ -413,10 +420,9 @@ userid_t search_data::parseUserBuf(char *buf){
 
 void search_data::fillRand(uint32_t count){
 	uint32_t i;
-	uint32_t index;
 	user_t user;
 
-	for(i = 0; i < count; i++){
+	for(i = 1; i <= count; i++){
 		user.loc = 1 + rand() % 300;
 		user.age = 14 + rand() % 50;
 		user.sex = rand() % 2;
@@ -425,10 +431,10 @@ void search_data::fillRand(uint32_t count){
 		user.single = rand() % 2;
 		user.sexuality = rand() % 4;
 
-		index = setUser(i+1, user);
+		setUser(i, user);
 		
 		while(rand()%10 != 0)
-			setInterest(index, rand()%300 + 1);
+			setInterest(i, rand()%300 + 1);
 	}
 }
 
@@ -539,7 +545,7 @@ void search_data::searchUsers(search_t * srch){
 	if(uselist){
 		uit = users.begin();
 		uitend = users.end();
-		for(; uit != uitend; uit++){
+		for(; uit != uitend; ++uit){
 			if(matchUser(userlist[*uit], * srch)){
 				srch->totalrows++;
 
@@ -552,7 +558,7 @@ void search_data::searchUsers(search_t * srch){
 		vector<user_t>::iterator ulit = userlist.begin();
 		vector<user_t>::iterator ulitend = userlist.end();
 
-		for(i = 0; ulit != ulitend; ulit++, i++){
+		for(++ulit, i = 0; ulit != ulitend; ++ulit, ++i){ //skip the first because it's a null user
 			if(matchUser(* ulit, * srch)){
 				srch->totalrows++;
 

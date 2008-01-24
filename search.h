@@ -79,13 +79,13 @@ using namespace std;
 #if BIT_PACK_USER_STRUCT
 
 struct user_t {
-	uint16_t loc;
-	unsigned char age;
-	unsigned int sex       :1 ;
-	unsigned int active    :2 ;
-	unsigned int pic       :2 ;
-	unsigned int single    :1 ;
-	unsigned int sexuality :2 ;
+	uint16_t loc; // the users location. This could be removed but is convenient to keep the loclist up to date
+	unsigned int age       :8 ; // age (14-60)
+	unsigned int sex       :1 ; // 0 : male, 1 : female
+	unsigned int active    :2 ; // 0 : inactive, 1 : active, 2 : online
+	unsigned int pic       :2 ; // 0 : no pic, 1 : pic, 2 : sign pic
+	unsigned int single    :1 ; // 0 : not single, 1 : single
+	unsigned int sexuality :2 ; // 0 : unknown, 1 : hetero, 2 : homo, 3 : bi
 };
 
 #else
@@ -146,7 +146,7 @@ public:
 	unsigned char sexuality;
 	vector<uint32_t> locs; //any
 	vector<uint32_t> interests; //any/all?
-	bool allinterests;
+	bool allinterests; // false => any, true => all
 	vector<uint32_t> socials; //any
 
 //limits
@@ -215,8 +215,8 @@ public:
 	void searchUsers(search_t * srch);
 
 private:
-	void setInterest(userid_t index, uint32_t interest);
-	void unsetInterest(userid_t index, uint32_t interest);
+	void setInterest(userid_t userid, uint32_t interest);
+	void unsetInterest(userid_t userid, uint32_t interest);
 
 	inline char matchUser(const user_t & user, const search_t & srch);
 	userid_t parseUserBuf(char *buf);
