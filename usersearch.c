@@ -181,8 +181,8 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	srch->pic = 1;
 	srch->single = 0;
 	srch->sexuality = 0;
-//	srch->loc = vector<uint32_t>;
-//	srch->interest = vector<uint32_t>;
+
+	srch->allinterests = 0;
 
 	srch->offset = 0;
 	srch->rowcount = 25;
@@ -196,6 +196,8 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "single")))    srch->single    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) srch->sexuality = atoi(ptr);
 
+	if((ptr = evhttp_find_header(&searchoptions, "allinterests"))) srch->allinterests = atoi(ptr);
+
 	if((ptr = evhttp_find_header(&searchoptions, "locs")))      parse_comma_list(srch->locs,      ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "interests"))) parse_comma_list(srch->interests, ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "socials")))   parse_comma_list(srch->socials,   ptr);
@@ -203,7 +205,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
 
-//	srch.verbosePrint();
+//	srch->verbosePrint();
 
 	global->request->push(srch);
 	evhttp_clear_headers(&searchoptions);
