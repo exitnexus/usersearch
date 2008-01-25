@@ -11,23 +11,9 @@
 
 #include "iterpair.h"
 
-#define USERSET_VEC 1
-//#define USERSET_SET 1
-
-
-
-
- 
 using namespace std;
 
-
-
-#ifdef USERSET_VEC
 #include <vector>
-#else
-#include <set>
-#endif
-
 #include <algorithm>
 
 
@@ -37,13 +23,7 @@ class userset {
 public:
 	typedef uint32_t index_type;
 
-#ifdef USERSET_VEC
 	typedef vector<index_type> settype;
-#else
-	typedef set<index_type> settype;
-#endif
-
-
 	typedef settype::iterator iterator;
 
 private:
@@ -93,37 +73,40 @@ public:
 		return (userlist == other.userlist);
 	}
 
+	void printlist(unsigned int id){
+		readlock();
+
+		iterator it = userlist.begin();
+		iterator itend = userlist.end();
+
+		printf("Id %u, size %u: ", id, (unsigned int)userlist.size());
+
+		for(; it != itend; ++it)
+			printf("%u ", *it);
+
+		printf("\n");
+
+		unlock();
+	}
+
 	void addUser(index_type val){
 		writelock();
-
-#ifdef USERSET_VEC
 
 		iterator loc = lower_bound(userlist.begin(), userlist.end(), val);
 		if(loc == userlist.end() || *loc != val)
 			userlist.insert(loc, val);
 
-#else //USERSET_SET
-
-		userlist.insert(val);
-
-#endif
 		unlock();
 	}
 
 	void deleteUser(index_type val){
 		writelock();
 
-#ifdef USERSET_VEC
-
 		iterator loc = lower_bound(userlist.begin(), userlist.end(), val);
 
 		if(*loc == val)
 			userlist.erase(loc);
 
-#else
-		userlist.erase(val);
-
-#endif
 		unlock();
 	}
 
@@ -173,7 +156,6 @@ private:
 		settype newlist;
 		index_type * itend;
 
-#ifdef USERSET_VEC
 		if(intersect)
 			newlist.resize(min(userlist.size(), other.userlist.size()));
 		else
@@ -182,25 +164,16 @@ private:
 		if(newlist.size() == 0)
 			return;
 
-//use &* to get a real pointer instead of an iterator. This makes it mildly faster
-#define INSERTER(list) &*list.begin()
-
-#else
-#define INSERTER(list) inserter(list, list.begin())
-#endif
-
-
 		readlock();
 		other.readlock();
 
+//use &* for the back_inserter to get a real pointer instead of an iterator. This makes it mildly faster
 		if(intersect)
-			itend = set_intersection(userlist.begin(), userlist.end(), other.begin(), other.end(), INSERTER(newlist));
+			itend = set_intersection(userlist.begin(), userlist.end(), other.begin(), other.end(), &*newlist.begin());
 		else
-			itend = set_union(userlist.begin(), userlist.end(), other.begin(), other.end(), INSERTER(newlist));
+			itend = set_union(userlist.begin(), userlist.end(), other.begin(), other.end(), &*newlist.begin());
 
-#ifdef USERSET_VEC
 		newlist.resize(itend - &*newlist.begin());
-#endif
 
 		other.unlock();
 		unlock();
@@ -360,9 +333,7 @@ private:
 
 		writelock();
 
-#ifdef USERSET_VEC
 		newlist.resize(newit - &*newlist.begin());
-#endif
 
 		userlist.swap(newlist);
 		unlock();
