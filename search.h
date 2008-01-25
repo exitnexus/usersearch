@@ -170,9 +170,13 @@ public:
 typedef vector<user_t>::iterator user_iter;
 
 class search_data {
+	char * datasource; // url or directory to load data from
+	
+	vector<uint32_t> locationtree; //id -> parent id mapping for filling the populating the loclist recursively
+
 	vector<user_t>  userlist;      // list of user info (age, sex, etc)
 
-	vector<userset> loclist;       // location -> list of userids
+	vector<userset> loclist;       // location -> list of userids of this location and all sub locations
 	vector<userset> interestlist;  // interest -> list of userids
 	vector<userset> sociallist;    // social circle -> list of userids
 
@@ -188,11 +192,13 @@ public:
 	search_data();
 	~search_data();
 
-	void fillRand(uint32_t count);
-	void fillSearchFile(char * filename);
-	void fillSearchStdin();
-	void fillSearchUrl(char * url);
-	void fillSearchFd(FILE * input);
+	bool loaddata(char * load_loc);
+
+	void loadlocations();
+	void loadusers();
+	void loadinterests();
+
+	void fillRandom(uint32_t count);
 
 	unsigned int size();
 
@@ -209,7 +215,7 @@ public:
 	void verbosePrintUser(userid_t userid, user_t * user);
 	bool userToStringVerbose(userid_t userid, char * buffer);
 	void userToStringVerbose(userid_t userid, user_t * user, char * buffer);
-	
+
 	void dumpSearchData(unsigned int max = 0);
 
 	void searchUsers(search_t * srch);
@@ -219,8 +225,7 @@ private:
 	void unsetInterest(userid_t userid, uint32_t interest);
 
 	inline char matchUser(const user_t & user, const search_t & srch);
-	userid_t parseUserBuf(char *buf);
-
+	FILE * getfd(char * filename);
 };
 
 

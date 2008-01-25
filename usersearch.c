@@ -531,14 +531,14 @@ int main(int argc, char **argv){
 	char hostname_def[] = "0.0.0.0";
 	char threads_def[] = "3";
 	char bench_def[] = "0";
-	char load_loc_def[] = "-";
+	char data_source_def[] = "./";
 
 	//Argument Pointers
 	char *port_arg = port_def;
 	char *hostname_arg = hostname_def;
 	char *threads_arg = threads_def;
 	char *bench_arg = bench_def;
-	char *load_loc = load_loc_def;
+	char *data_source = data_source_def;
 
 
 //Parse command line options
@@ -547,12 +547,12 @@ int main(int argc, char **argv){
 		if(strcmp(ptr, "--help") == 0){
 			printf("Usage:\n"
 				"\t--help        Show this help\n"
-				"\t-l            Load data from this location (rand:num, url, filename or - for stdin)\n"
+				"\t-l            Load data from this location (rand:num, base url, or directory) [%s]\n"
 				"\t-p            Port Number [%s]\n"
 				"\t-h            Hostname [%s]\n"
 				"\t-b            Benchark with number of random searches\n"
 				"\t-t            Number of threads [%s]\n\n",
-				port_def, hostname_def, threads_def);
+				data_source_def, port_def, hostname_def, threads_def);
 			exit(255);
 		}else if (strcmp(ptr, "-p") == 0)
 			port_arg = ptr = argv[++i];
@@ -563,7 +563,7 @@ int main(int argc, char **argv){
 		else if (strcmp(ptr, "-b") == 0)
 			bench_arg = ptr = argv[++i];
 		else if (strcmp(ptr, "-l") == 0)
-			load_loc = ptr = argv[++i];
+			data_source = ptr = argv[++i];
 	}
 
 
@@ -589,14 +589,10 @@ int main(int argc, char **argv){
 
 	gettimeofday(&start, NULL);
 
-	if(load_loc[0] == '-')
-		global->data->fillSearchStdin();
-	else if(strlen(load_loc) > 7 && strncmp("http://", load_loc, 7) == 0)
-		global->data->fillSearchUrl(load_loc);
-	else if(strlen(load_loc) > 6 && strncmp("rand:", load_loc, 5) == 0)
-		global->data->fillRand(atoi(load_loc+5));
-	else
-		global->data->fillSearchFile(load_loc);
+	if(!global->data->loaddata(data_source)){
+		printf("Invalid data source: %s\n", data_source);
+		return 1;
+	}
 
 	gettimeofday(&finish, NULL);
 

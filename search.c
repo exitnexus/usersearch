@@ -247,59 +247,191 @@ bool search_data::delUser(userid_t userid){
 	return true;
 }
 
+bool search_data::loaddata(char * load_loc){
+	if(load_loc)
+		datasource = load_loc;
 
-void search_data::fillSearchFile(char * filename){
-	FILE * input;
+	if(!datasource)
+		return false;
 
-	input = fopen(filename, "r");
-
-	if(!input){
-		printf("Failed to open file %s\n", filename);
-		exit(1);
+	if(strlen(datasource) > 6 && strncmp("rand:", datasource, 5) == 0){
+		fillRandom(atoi(datasource+5));
+		return true;
 	}
 
-	fillSearchFd(input);
 
-	fclose(input);
+	loadlocations();
+	loadusers();
+	loadinterests();
+
+	return true;
 }
 
+FILE * search_data::getfd(char * filename){
+	FILE * input;
+	
+	char * path = (char *)malloc(strlen(datasource) + strlen(filename));
+	strcpy(path, datasource);
+	strcat(path, filename);
 
-void search_data::fillSearchStdin(){
-	fillSearchFd(stdin);
-}
+//get the fd from the url
+	if(strlen(datasource) > 7 && strncmp("http://", datasource, 7) == 0){
+		struct hostent *hp;
+		struct sockaddr_in addr;
+		int on = 1, sock;     
 
-void search_data::fillSearchFd(FILE * input){
-	char buf[256];
-	unsigned int ibuf[100];
-	uint32_t i = 0;
+		char * host;
+		char * uri;
 
-	userid_t userid;
-	uint32_t interestid;
+	//parse the host and uri
+		host = path + 7;
+		uri = strchr(host, '/')+1; //position one past the / separator between the host and the uri
+	
+		host[(uri-1-host)] = '\0'; //turn the / separator into a \0
+	
+	//setup the socket	
+		if((hp = gethostbyname(host)) == NULL){
+			printf("unknown host: %s\n", host);
+			exit(1);
+		}
+		bcopy(hp->h_addr, &addr.sin_addr, hp->h_length);
+		addr.sin_port = htons(80);
+		addr.sin_family = AF_INET;
+		sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+		setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const char *)&on, sizeof(int));
+		if(sock == -1){
+			perror("setsockopt");
+			exit(1);
+		}
+		if(connect(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1){
+			perror("connect");
+			exit(1);
+		}
 
-//user definitions
-	fgets(buf, sizeof(buf), input); //ignore the first line
+	//write the request
+		char buf[1024];
 
-	while(fgets(buf, sizeof(buf), input)){
-		i++;
+		sprintf(buf, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n", uri, host);
 
-		if(buf[0] == '\n') //blank line marks the end of this section
-			break;
+		write(sock, buf, strlen(buf));
 
-		if(!parseUserBuf(buf)){
-			printf("Bad input file on line %u\n", i);
+	//get a FILE * from the socket for reading with fgets
+		input = fdopen(sock, "r");
+
+		while(fgets(buf, sizeof(buf), input) && buf[0] != '\r'); //ignore the headers, stop when the first char is \r
+
+
+//get the url from the file path
+	}else{
+		input = fopen(path, "r");
+
+		if(!input){
+			printf("Failed to open file %s\n", path);
 			exit(1);
 		}
 	}
 
+	free(path);
+
+	return input;
+}
+
+
+void search_data::loadlocations(){
+	char buf[256];
+	unsigned int ibuf[2];
+	uint32_t i = 0;
+
+	FILE * input = getfd("locations");
+
 //interest definitions
-	fgets(buf, sizeof(buf), input); //ignore the first line
+	fgets(buf, sizeof(buf), input); //first line is the signature
 	i++;
+
+	if(strcmp(buf, "id,parent\n") != 0){
+		printf("Location file signature doesn't match\n");
+		exit(1);
+	}
 
 	while(fgets(buf, sizeof(buf), input)){
 		i++;
 
 		if(2 != fillibuf(buf, ibuf, 2)){
-			printf("Bad input file on line %u\n", i);
+			printf("Bad location input file on line %u\n", i);
+			exit(1);
+		}
+
+		while(locationtree.size() <= ibuf[0])
+			locationtree.push_back(0);
+
+		locationtree[ibuf[0]] = ibuf[1];
+	}
+}
+
+//fill the users information
+void search_data::loadusers(){
+	char buf[256];
+	unsigned int ibuf[8];
+	uint32_t i = 0;
+	
+	userid_t userid;
+	user_t   user;
+
+	FILE * input = getfd("users");
+
+	fgets(buf, sizeof(buf), input); //ignore the first line
+
+	if(strcmp(buf, "userid,age,sex,loc,active,pic,single,sexuality\n") != 0){
+		printf("Users file signature doesn't match\n");
+		exit(1);
+	}
+
+	while(fgets(buf, sizeof(buf), input)){
+		i++;
+
+		if(8 != fillibuf(buf, ibuf, 8)){
+			printf("Bad users input file on line %u\n", i);
+			exit(1);
+		}
+
+		userid         = ibuf[0];
+		user.age       = ibuf[1];
+		user.sex       = ibuf[2];
+		user.loc       = ibuf[3];
+		user.active    = ibuf[4];
+		user.pic       = ibuf[5];
+		user.single    = ibuf[6];
+		user.sexuality = ibuf[7];
+
+		setUser(userid, user);
+	}
+}
+
+//load the users interests
+void search_data::loadinterests(){
+	char buf[256];
+	unsigned int ibuf[2];
+	uint32_t i = 0;
+
+	userid_t userid;
+	uint32_t interestid;
+
+	FILE * input = getfd("interests");
+
+//interest definitions
+	fgets(buf, sizeof(buf), input); //first line is the signature
+	i++;
+
+	if(strcmp(buf, "userid,interestid\n") != 0){
+		printf("Interest file signature doesn't match\n");
+		exit(1);
+	}
+
+	while(fgets(buf, sizeof(buf), input)){
+		i++;
+
+		if(2 != fillibuf(buf, ibuf, 2)){
+			printf("Bad interest input file on line %u\n", i);
 			exit(1);
 		}
 
@@ -310,117 +442,13 @@ void search_data::fillSearchFd(FILE * input){
 	}
 }
 
-//only takes urls of the form: http://domain.com/uri
-//https and port arne't valid
-void search_data::fillSearchUrl(char * url){
-
-	struct hostent *hp;
-	struct sockaddr_in addr;
-	int on = 1, sock;     
-
-	char * host;
-	char * uri;
-
-//parse the host
-	host = strdup(url+7);
-	char * pos = strchr(host, '/');
-
-	host[(pos-host)] = '\0';
-
-//parse the uri
-	uri = strdup(url + 7 + (pos-host));
-
-
-	if((hp = gethostbyname(host)) == NULL){
-		printf("unknown host: %s\n", host);
-		exit(1);
-	}
-	bcopy(hp->h_addr, &addr.sin_addr, hp->h_length);
-	addr.sin_port = htons(80);
-	addr.sin_family = AF_INET;
-	sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const char *)&on, sizeof(int));
-	if(sock == -1){
-		perror("setsockopt");
-		exit(1);
-	}
-	if(connect(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1){
-		perror("connect");
-		exit(1);
-	}
-
-//write the request
-	char buf[256];
-	
-	sprintf(buf, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n", uri, host);
-
-	write(sock, buf, strlen(buf));
-
-//get a FILE * from the socket for reading with fgets
-	FILE * fsock = fdopen(sock, "r");
-
-	while(fgets(buf, sizeof(buf), fsock) && buf[0] != '\r')
-		if(buf[0] == '\r')
-			break;
-
-	fillSearchFd(fsock);
-
-	fclose(fsock);
-	free(host);
-	free(uri);
-}
-
-userid_t search_data::parseUserBuf(char *buf){
-	user_t user;
-	unsigned int userid, id;
-
-	unsigned int loc;
-	unsigned int age;
-	unsigned int sex;
-	unsigned int active;
-	unsigned int pic;
-	unsigned int single;
-	unsigned int sexuality;
-
-	unsigned int ibuf[100];
-
-	// id,userid,age,sex,loc,active,pic,single,sexualit
-	// 56,2080347,19,1,19,1,1,0,0
-
-//store in temp variables so that they can be full size
-
-	if(9 != fillibuf(buf, ibuf, 9))
-		return 0;
-
-	id        = ibuf[0];
-	userid    = ibuf[1];
-	age       = ibuf[2];
-	sex       = ibuf[3];
-	loc       = ibuf[4];
-	active    = ibuf[5];
-	pic       = ibuf[6];
-	single    = ibuf[7];
-	sexuality = ibuf[8];
-
-	//ignore id
-	user.age = age;
-	user.sex = sex;
-	user.loc = loc;
-	user.active = active;
-	user.pic = pic;
-	user.single = single;
-	user.sexuality = sexuality;
-
-	setUser(userid, user);
-
-	return userid;
-}
-
-
-
-void search_data::fillRand(uint32_t count){
+void search_data::fillRandom(uint32_t count){
 	uint32_t i;
 	user_t user;
+
+	locationtree.push_back(0);
+	for(i = 1; i <= 300; i++)
+		locationtree.push_back(rand()%i);
 
 	for(i = 1; i <= count; i++){
 		user.loc = 1 + rand() % 300;
