@@ -224,6 +224,9 @@ private:
 	void setInterest(userid_t userid, uint32_t interest);
 	void unsetInterest(userid_t userid, uint32_t interest);
 
+	void setLoc(userid_t userid, uint32_t loc);
+	void unsetLoc(userid_t userid, uint32_t loc);
+
 	inline char matchUser(const user_t & user, const search_t & srch);
 	FILE * getfd(char * filename);
 };

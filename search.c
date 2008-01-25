@@ -136,17 +136,23 @@ unsigned int search_data::size(){
 
 uint32_t search_data::setUser(const userid_t userid, const user_t user){
 	uint32_t index = 0;
-
-	while(loclist.size() <= user.loc)
-		loclist.push_back( userset() );
+	bool locchanged = false;
 
 	pthread_rwlock_wrlock(&rwlock);
 
 	if(useridmap.size() > userid && useridmap[userid]){ //already exists, put it there
 		index = useridmap[userid];
 
+		locchanged = (userlist[index].loc != user.loc);
+
+		if(locchanged)
+			unsetLoc(userid, userlist[index].loc);
+
 		userlist[index] = user;
 		//assume usermap and useridmap are already correct
+
+		if(locchanged)
+			setLoc(userid, userlist[index].loc);
 
 	}else if(deluserlist.size()){ //space exists from a previous user
 		index = deluserlist.back();
@@ -160,6 +166,8 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 
 		useridmap[userid] = index;
 
+		setLoc(userid, userlist[index].loc);
+
 	}else{ //make space
 		index = userlist.size();
 
@@ -172,9 +180,9 @@ uint32_t search_data::setUser(const userid_t userid, const user_t user){
 			useridmap.push_back(0);
 
 		useridmap[userid] = index;
-	}
 
-	loclist[user.loc].addUser(index);
+		setLoc(userid, userlist[index].loc);
+	}
 
 	pthread_rwlock_unlock(&rwlock);
 
@@ -195,6 +203,33 @@ void search_data::unsetInterest(userid_t userid, uint32_t interest){
 		interestlist[interest].deleteUser(useridmap[userid]);
 }
 
+void search_data::setLoc(userid_t userid, uint32_t loc){
+	userid_t index = 0;
+
+	if(useridmap.size() > userid && useridmap[userid])
+		index = useridmap[userid];
+
+	while(index && loc){
+		while(loclist.size() <= loc)
+			loclist.push_back( userset() );
+
+		loclist[loc].addUser(index);
+		loc = locationtree[loc];
+	}
+}
+
+void search_data::unsetLoc(userid_t userid, uint32_t loc){
+	userid_t index = 0;
+
+	if(useridmap.size() > userid && useridmap[userid])
+		index = useridmap[userid];
+
+	while(index && loc){
+		loclist[loc].deleteUser(index);
+		loc = locationtree[loc];
+	}
+}
+
 bool search_data::updateUser(user_update * upd){
 	uint32_t index;
 
@@ -207,9 +242,9 @@ bool search_data::updateUser(user_update * upd){
 
 	switch(upd->field){
 		case UF_LOC:
-			loclist[userlist[index].loc].deleteUser(upd->userid); //unset the previous
+			unsetLoc(upd->userid, userlist[index].loc);
 			userlist[index].loc = upd->val;
-			loclist[userlist[index].loc].addUser(upd->userid);
+			setLoc(upd->userid, userlist[index].loc);
 			break;
 		case UF_AGE:       userlist[index].age       = upd->val; break;
 		case UF_SEX:       userlist[index].sex       = upd->val; break;
@@ -235,6 +270,8 @@ bool search_data::delUser(userid_t userid){
 	pthread_rwlock_wrlock(&rwlock);
 
 	index = useridmap[userid];
+
+	unsetLoc(userid, userlist[index].loc);
 
 	useridmap[userid] = 0;
 	usermap[index] = 0;
@@ -586,7 +623,7 @@ void search_data::searchUsers(search_t * srch){
 		vector<user_t>::iterator ulit = userlist.begin();
 		vector<user_t>::iterator ulitend = userlist.end();
 
-		for(++ulit, i = 0; ulit != ulitend; ++ulit, ++i){ //skip the first because it's a null user
+		for(++ulit, i = 1; ulit != ulitend; ++ulit, ++i){ //skip the first because it's a null user
 			if(matchUser(* ulit, * srch)){
 				srch->totalrows++;
 

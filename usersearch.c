@@ -178,7 +178,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	srch->agemin = 14;
 	srch->agemax = 60;
 	srch->sex = 2;
-	srch->active = 1;
+	srch->active = 2;
 	srch->pic = 1;
 	srch->single = 0;
 	srch->sexuality = 0;
