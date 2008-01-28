@@ -204,6 +204,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "interests"))) parse_comma_list(srch->interests, ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "socials")))   parse_comma_list(srch->socials,   ptr);
 
+	if((ptr = evhttp_find_header(&searchoptions, "quick")))     srch->quick     = (*ptr != '0');
 	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
 
