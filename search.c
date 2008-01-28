@@ -614,8 +614,12 @@ void search_data::searchUsers(search_t * srch){
 			if(matchUser(userlist[*uit], * srch)){
 				srch->totalrows++;
 
-				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range
+				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount){ //within the search range
 					srch->results.push_back(usermap[*uit]); //append the userid to the results
+
+					if(srch->quick && srch->results.size() == srch->rowcount)
+						break;
+				}
 			}
 		}
 	}else{
@@ -627,8 +631,12 @@ void search_data::searchUsers(search_t * srch){
 			if(matchUser(* ulit, * srch)){
 				srch->totalrows++;
 
-				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount) //within the search range
+				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount){ //within the search range
 					srch->results.push_back(usermap[i]); //append the userid to the results
+
+					if(srch->quick && srch->results.size() == srch->rowcount)
+						break;
+				}
 			}
 		}
 	}

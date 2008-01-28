@@ -150,6 +150,7 @@ public:
 	vector<uint32_t> socials; //any
 
 //limits
+	bool         quick;    // if true, return as soon as the rowcount is found, totalrows will be inaccurate
 	unsigned int rowcount; // ie find 25 results
 	unsigned int offset;   //    starting from row 100
 

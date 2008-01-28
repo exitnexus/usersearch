@@ -185,6 +185,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 
 	srch->allinterests = 0;
 
+	srch->quick = false;
 	srch->offset = 0;
 	srch->rowcount = 25;
 	srch->totalrows = 0;
