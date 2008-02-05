@@ -185,7 +185,12 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 
 	srch->allinterests = 0;
 
+	srch->newusers = false;
+	srch->bday     = false;
+	srch->updated  = false;
+
 	srch->quick = false;
+	srch->random = false;
 	srch->offset = 0;
 	srch->rowcount = 25;
 	srch->totalrows = 0;
@@ -200,11 +205,16 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 
 	if((ptr = evhttp_find_header(&searchoptions, "allinterests"))) srch->allinterests = atoi(ptr);
 
+	if((ptr = evhttp_find_header(&searchoptions, "newusers")))  srch->newusers  = (*ptr != '0');
+	if((ptr = evhttp_find_header(&searchoptions, "bday")))      srch->bday      = (*ptr != '0');
+	if((ptr = evhttp_find_header(&searchoptions, "updated")))   srch->updated   = (*ptr != '0');
+
 	if((ptr = evhttp_find_header(&searchoptions, "locs")))      parse_comma_list(srch->locs,      ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "interests"))) parse_comma_list(srch->interests, ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "socials")))   parse_comma_list(srch->socials,   ptr);
 
 	if((ptr = evhttp_find_header(&searchoptions, "quick")))     srch->quick     = (*ptr != '0');
+	if((ptr = evhttp_find_header(&searchoptions, "random")))    srch->random    = (*ptr != '0');
 	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
 
@@ -454,7 +464,7 @@ void benchmarkSearch(global_data * global, unsigned int numsearches){
 	for(i = 0; i < numsearches; i++){
 		srch = new search_t();
 		srch->rowcount = 25;
-		srch->random();
+		srch->genrandom();
 
 //		srch->verbosePrint();
 

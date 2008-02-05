@@ -70,39 +70,15 @@ using namespace std;
 #include "usersetbase.h"
 
 
-
-
-#define BIT_PACK_USER_STRUCT 1
-
-
-
-#if BIT_PACK_USER_STRUCT
-
 struct user_t {
 	uint16_t loc; // the users location. This could be removed but is convenient to keep the loclist up to date
 	unsigned int age       :8 ; // age (14-60)
 	unsigned int sex       :1 ; // 0 : male, 1 : female
-	unsigned int active    :2 ; // 0 : inactive, 1 : active, 2 : online
+	unsigned int active    :2 ; // 0 : inactive, 1 : active this month, 2 : active this week, 3 : online
 	unsigned int pic       :2 ; // 0 : no pic, 1 : pic, 2 : sign pic
 	unsigned int single    :1 ; // 0 : not single, 1 : single
 	unsigned int sexuality :2 ; // 0 : unknown, 1 : hetero, 2 : homo, 3 : bi
 };
-
-#else
-
-struct user_t {
-	uint16_t loc;
-	unsigned char age;       // age (14-60)
-	unsigned char sex;       // 0 : male, 1 : female
-	unsigned char active;    // 0 : inactive, 1 : active, 2 : online
-	unsigned char pic;       // 0 : no pic, 1 : pic, 2 : sign pic
-	unsigned char single;    // 0 : not single, 1 : single
-	unsigned char sexuality; // 0 : unknown, 1 : hetero, 2 : homo, 3 : bi
-};
-
-#endif
-
-
 
 enum userfield {
 	UF_LOC,
@@ -149,8 +125,13 @@ public:
 	bool allinterests; // false => any, true => all
 	vector<uint32_t> socials; //any
 
+	bool newusers;
+	bool bday;
+	bool updated;
+
 //limits
 	bool         quick;    // if true, return as soon as the rowcount is found, totalrows will be inaccurate
+	bool         random;   // if true, ignore rowcount/offset and return 1 random row, don't fill totalrows
 	unsigned int rowcount; // ie find 25 results
 	unsigned int offset;   //    starting from row 100
 
@@ -161,7 +142,7 @@ public:
 //request
 	struct evhttp_request *req;
 
-	void random();
+	void genrandom();
 	void print();
 	void verbosePrint();
 };

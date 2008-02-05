@@ -519,8 +519,6 @@ void search_data::searchUsers(search_t * srch){
 	srch->totalrows = 0;
 	srch->results.reserve(srch->rowcount);
 
-	unsigned int i;
-
 	userset::iterator uit, uitend;
 	vector<uint32_t>::iterator vit, vitend;
 
@@ -624,15 +622,15 @@ void search_data::searchUsers(search_t * srch){
 		}
 	}else{
 //search over all users
-		vector<user_t>::iterator ulit = userlist.begin();
+		vector<user_t>::iterator ulit = userlist.begin() + 1; //skip the first because it's a null user
 		vector<user_t>::iterator ulitend = userlist.end();
 
-		for(++ulit, i = 1; ulit != ulitend; ++ulit, ++i){ //skip the first because it's a null user
+		for(; ulit != ulitend; ++ulit){
 			if(matchUser(* ulit, * srch)){
 				srch->totalrows++;
 
 				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount){ //within the search range
-					srch->results.push_back(usermap[i]); //append the userid to the results
+					srch->results.push_back(usermap[(ulit - userlist.begin())]); //append the userid to the results
 
 					if(srch->quick && srch->results.size() == srch->rowcount)
 						break;
@@ -674,7 +672,7 @@ void search_t::verbosePrint(){
 	}
 }
 
-void search_t::random(){
+void search_t::genrandom(){
 	agemin = 14 + rand() % 50;
 	agemax = agemin + rand() % 15;
 	sex = rand() % 3;
