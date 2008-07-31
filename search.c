@@ -254,6 +254,8 @@ bool search_data::updateUser(user_update * upd){
 		case UF_SEXUALITY: userlist[index].sexuality = upd->val; break;
 		case UF_ADD_INTEREST:   setInterest(upd->userid, upd->val); break;
 		case UF_DEL_INTEREST: unsetInterest(upd->userid, upd->val); break;
+		case UF_ADD_BDAY: bday.addUser(index);    break;
+		case UF_DEL_BDAY: bday.deleteUser(index); break;
 	}
 
 	pthread_rwlock_unlock(&rwlock);
@@ -280,6 +282,8 @@ bool search_data::delUser(userid_t userid){
 	deluserlist.push_back(index);
 
 	pthread_rwlock_unlock(&rwlock);
+
+	bday.deleteUser(index);
 
 	return true;
 }
@@ -519,7 +523,6 @@ void search_data::searchUsers(search_t * srch){
 	srch->totalrows = 0;
 	srch->results.reserve(srch->rowcount);
 
-	userset::iterator uit, uitend;
 	vector<uint32_t>::iterator vit, vitend;
 
 	userset users;
@@ -527,7 +530,17 @@ void search_data::searchUsers(search_t * srch){
 
 	bool uselist = false;
 
-//intersect the union of the locations above
+//intersect the birthday list
+	if(srch->bday){
+		if(!uselist)
+			users = bday;
+		else
+			users.intersect_set(bday);
+
+		uselist = true;
+	}
+
+//intersect the union of the locations
 	if(srch->locs.size()){
 		temp = userset(); //reset to empty
 
@@ -546,7 +559,7 @@ void search_data::searchUsers(search_t * srch){
 		uselist = true;
 	}
 
-//intersect the union or intersection of the interests
+//intersect the (union or intersection) of the interests
 	if(srch->interests.size()){
 		temp = userset(); //reset to empty
 
@@ -600,42 +613,37 @@ void search_data::searchUsers(search_t * srch){
 		uselist = true;
 	}
 
-//lock userlist
+//readlock userlist
 	pthread_rwlock_rdlock(&rwlock);
 
 
 //limit to a subset of the users, as defined above
 	if(uselist){
-		uit = users.begin();
-		uitend = users.end();
-		for(; uit != uitend; ++uit){
-			if(matchUser(userlist[*uit], * srch)){
-				srch->totalrows++;
+		userset::iterator uit = users.begin();
+		userset::iterator uitend = users.end();
 
-				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount){ //within the search range
-					srch->results.push_back(usermap[*uit]); //append the userid to the results
+		if(uit != uitend){
+			if(srch->random){
+				userset::iterator uitmid = uit + (rand() % (uitend - uit));
 
-					if(srch->quick && srch->results.size() == srch->rowcount)
-						break;
-				}
+				if(!scanList(srch, uitmid, uitend))
+					scanList(srch, uit, uitmid);
+			}else{
+				scanList(srch, uit, uitend);
 			}
 		}
 	}else{
 //search over all users
 		vector<user_t>::iterator ulit = userlist.begin() + 1; //skip the first because it's a null user
 		vector<user_t>::iterator ulitend = userlist.end();
+		
+		if(srch->random){
+			vector<user_t>::iterator ulitmid = ulit + (rand() % (ulitend - ulit));
 
-		for(; ulit != ulitend; ++ulit){
-			if(matchUser(* ulit, * srch)){
-				srch->totalrows++;
-
-				if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount){ //within the search range
-					srch->results.push_back(usermap[(ulit - userlist.begin())]); //append the userid to the results
-
-					if(srch->quick && srch->results.size() == srch->rowcount)
-						break;
-				}
-			}
+			if(!scanFull(srch, ulitmid, ulitend))
+				scanFull(srch, ulit, ulitmid);
+		}else{
+			scanFull(srch, ulit, ulitend);
 		}
 	}
 
@@ -643,7 +651,39 @@ void search_data::searchUsers(search_t * srch){
 	pthread_rwlock_unlock(&rwlock);
 }
 
+//take a start and end point of a userset, and see which of those match the search criteria in the userlist
+bool search_data::scanList(search_t * srch, userset::iterator uit, userset::iterator uitend){
+	for(; uit != uitend; ++uit){
+		if(matchUser(userlist[*uit], * srch)){
+			srch->totalrows++;
 
+			if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount){ //within the search range
+				srch->results.push_back(usermap[*uit]); //append the userid to the results
+
+				if(srch->quick && srch->results.size() == srch->rowcount)
+					return true;
+			}
+		}
+	}
+	return false;
+}
+
+//take a start and end point in the userlist, and see which of those match the search criteria
+bool search_data::scanFull(search_t * srch, vector<user_t>::iterator ulit, vector<user_t>::iterator ulitend){
+	for(; ulit != ulitend; ++ulit){
+		if(matchUser(* ulit, * srch)){
+			srch->totalrows++;
+
+			if(srch->totalrows > srch->offset && srch->results.size() < srch->rowcount){ //within the search range
+				srch->results.push_back(usermap[(ulit - userlist.begin())]); //append the userid to the results
+
+				if(srch->quick && srch->results.size() == srch->rowcount)
+					return true;
+			}
+		}
+	}
+	return false;
+}
 
 
 
@@ -652,6 +692,27 @@ void search_data::searchUsers(search_t * srch){
 //////////////////////////////////
 
 
+search_t::search_t(){
+	agemin = 14;
+	agemax = 60;
+	sex = 2;
+	active = 2;
+	pic = 1;
+	single = 0;
+	sexuality = 0;
+
+	allinterests = false;
+
+	newusers = false;
+	bday     = false;
+	updated  = false;
+
+	quick = false;
+	random = false;
+	offset = 0;
+	rowcount = 25;
+	totalrows = 0;
+}
 
 void search_t::print(){
 	printf("%u-%u,%s,%u,%u,%u,%u\n",
@@ -673,17 +734,25 @@ void search_t::verbosePrint(){
 }
 
 void search_t::genrandom(){
-	agemin = 14 + rand() % 50;
+
+//	random = ((rand() % 10) == 0);
+
+	agemin = 14 + rand() % 40;
 	agemax = agemin + rand() % 15;
 	sex = rand() % 3;
-	active = rand() % 3;
-	pic = rand() % 3;
-	single = rand() % 2;
-	sexuality = rand() % 4;
 
 	for(int i = rand() % 20; i >= 0; i--)
 		locs.push_back((rand() % 300) + 1);
 
+	if(random){
+		quick = true;
+		rowcount = 1;
+	}else{	
+		active = rand() % 4;
+		pic = rand() % 3;
+		single = rand() % 2;
+		sexuality = rand() % 4;
+	}
 
 //	interests = rand() % 300 + 1;
 

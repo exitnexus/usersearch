@@ -183,7 +183,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	srch->single = 0;
 	srch->sexuality = 0;
 
-	srch->allinterests = 0;
+	srch->allinterests = false;
 
 	srch->newusers = false;
 	srch->bday     = false;
@@ -203,7 +203,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "single")))    srch->single    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "sexuality"))) srch->sexuality = atoi(ptr);
 
-	if((ptr = evhttp_find_header(&searchoptions, "allinterests"))) srch->allinterests = atoi(ptr);
+	if((ptr = evhttp_find_header(&searchoptions, "allinterests"))) srch->allinterests = (*ptr != '0');
 
 	if((ptr = evhttp_find_header(&searchoptions, "newusers")))  srch->newusers  = (*ptr != '0');
 	if((ptr = evhttp_find_header(&searchoptions, "bday")))      srch->bday      = (*ptr != '0');
@@ -217,6 +217,12 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	if((ptr = evhttp_find_header(&searchoptions, "random")))    srch->random    = (*ptr != '0');
 	if((ptr = evhttp_find_header(&searchoptions, "offset")))    srch->offset    = atoi(ptr);
 	if((ptr = evhttp_find_header(&searchoptions, "rowcount")))  srch->rowcount  = atoi(ptr);
+
+	if(srch->random){
+		srch->quick = true;
+		srch->offset = 0;
+		srch->rowcount = 1;
+	}
 
 //	srch->verbosePrint();
 
@@ -463,7 +469,6 @@ void benchmarkSearch(global_data * global, unsigned int numsearches){
 
 	for(i = 0; i < numsearches; i++){
 		srch = new search_t();
-		srch->rowcount = 25;
 		srch->genrandom();
 
 //		srch->verbosePrint();
@@ -597,7 +602,7 @@ int main(int argc, char **argv){
 
 
 
-	printf("Loading user data ... ");
+	printf("Loading user data ...\n");
 
 	gettimeofday(&start, NULL);
 
@@ -608,9 +613,7 @@ int main(int argc, char **argv){
 
 	gettimeofday(&finish, NULL);
 
-	printf("%u users loaded\n", (unsigned int) global->data->size());
-
-	printf("Loading users took: %u ms\n", (unsigned int) ((finish.tv_sec*1000+finish.tv_usec/1000)-(start.tv_sec*1000+start.tv_usec/1000)));
+	printf("Loading %u users took %u ms\n", (unsigned int) global->data->size(), (unsigned int) ((finish.tv_sec*1000+finish.tv_usec/1000)-(start.tv_sec*1000+start.tv_usec/1000)));
 
 
 //	data->dumpSearchData(10);
@@ -624,7 +627,7 @@ int main(int argc, char **argv){
 		global->popfd = fds[1];
 	}
 
-	printf("Starting %u threads\n", numthreads);
+	printf("Starting %u search threads\n", numthreads);
 
 	for(i = 0; i < numthreads; i++){
 		threaddata[i].threadid = i;
@@ -668,6 +671,8 @@ int main(int argc, char **argv){
 	evhttp_set_cb(http, "/updateuser", handle_request_updateuser, global);
 	evhttp_set_cb(http, "/adduser",    handle_request_adduser,    global);
 	evhttp_set_cb(http, "/deleteuser", handle_request_deleteuser, global);
+
+//	evhttp_set_cb(http, "/bdaylist",   handle_request_bdaylist,   global);
 
 	evhttp_set_cb(http, "/printuser",  handle_request_printuser,  global);
 

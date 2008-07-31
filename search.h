@@ -89,7 +89,9 @@ enum userfield {
 	UF_SINGLE,
 	UF_SEXUALITY,
 	UF_ADD_INTEREST,
-	UF_DEL_INTEREST
+	UF_DEL_INTEREST,
+	UF_ADD_BDAY,
+	UF_DEL_BDAY
 };
 
 enum userop {
@@ -142,6 +144,7 @@ public:
 //request
 	struct evhttp_request *req;
 
+	search_t();
 	void genrandom();
 	void print();
 	void verbosePrint();
@@ -161,6 +164,8 @@ class search_data {
 	vector<userset> loclist;       // location -> list of userids of this location and all sub locations
 	vector<userset> interestlist;  // interest -> list of userids
 	vector<userset> sociallist;    // social circle -> list of userids
+
+	userset bday; //list of userids
 
 //need reverse mappings so when a user is deleted, the list of locations, interests and social circles can be updated
 
@@ -203,6 +208,9 @@ public:
 	void searchUsers(search_t * srch);
 
 private:
+	bool scanList(search_t * srch, userset::iterator uit, userset::iterator uitend);
+	bool scanFull(search_t * srch, vector<user_t>::iterator ulit, vector<user_t>::iterator ulitend);
+
 	void setInterest(userid_t userid, uint32_t interest);
 	void unsetInterest(userid_t userid, uint32_t interest);
 
