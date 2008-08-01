@@ -129,8 +129,8 @@ void handle_queue_searchresponse(int fd, short event, void *arg){
 		evb = evbuffer_new();
 
 		evbuffer_add_printf(evb, "totalrows: %u\n", srch->totalrows);
-		evbuffer_add_printf(evb, "returnedrows: %u\n", srch->results.size());
-		evbuffer_add_printf(evb, "userids: ", srch->results.size());
+		evbuffer_add_printf(evb, "returnedrows: %zu\n", srch->results.size());
+		evbuffer_add_printf(evb, "userids: %zu", srch->results.size());
 		for(i = 0; i < srch->results.size(); i++)
 			evbuffer_add_printf(evb, "%u,", srch->results[i]);
 		evbuffer_add_printf(evb, "\n");
