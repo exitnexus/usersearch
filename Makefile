@@ -12,18 +12,19 @@ DAEMON		= usersearch
 DAEMON_O	= search.o
 DAEMON_INC  = \
 	libevent/.libs/buffer.o \
-	libevent/.libs/epoll.o \
 	libevent/.libs/evbuffer.o \
 	libevent/.libs/event.o \
 	libevent/.libs/event_tagging.o \
+	libevent/.libs/evutil.o \
 	libevent/.libs/http.o \
+	libevent/.libs/kqueue.o \
 	libevent/.libs/log.o \
 	libevent/.libs/poll.o \
 	libevent/.libs/select.o \
 	libevent/.libs/signal.o \
 	libevent/.libs/strlcpy.o
 
-DAEMON_L	= -lpthread -lrt
+DAEMON_L	= -lpthread
 
 DATE		= `date +%Y-%m-%d-%H-%M`
 
@@ -52,6 +53,8 @@ $(DAEMON): $(DAEMON_INC) $(DAEMON_O) $(DAEMON).c
 
 pristine: clean
 	cd libevent; make clean
+	
+distclean: pristine
 
 clean:
 	rm -f $(DAEMON).tar.gz
