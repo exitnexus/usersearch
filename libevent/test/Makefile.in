@@ -41,35 +41,30 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
-mkinstalldirs = $(install_sh) -d
+mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
 am_bench_OBJECTS = bench.$(OBJEXT)
 bench_OBJECTS = $(am_bench_OBJECTS)
-bench_LDADD = $(LDADD)
 bench_DEPENDENCIES = ../libevent.la
 am_regress_OBJECTS = regress.$(OBJEXT) regress_http.$(OBJEXT) \
-	regress_dns.$(OBJEXT) regress.gen.$(OBJEXT)
+	regress_dns.$(OBJEXT) regress_rpc.$(OBJEXT) \
+	regress.gen.$(OBJEXT)
 regress_OBJECTS = $(am_regress_OBJECTS)
-regress_LDADD = $(LDADD)
 regress_DEPENDENCIES = ../libevent.la
 am_test_eof_OBJECTS = test-eof.$(OBJEXT)
 test_eof_OBJECTS = $(am_test_eof_OBJECTS)
-test_eof_LDADD = $(LDADD)
-test_eof_DEPENDENCIES = ../libevent.la
+test_eof_DEPENDENCIES = ../libevent_core.la
 am_test_init_OBJECTS = test-init.$(OBJEXT)
 test_init_OBJECTS = $(am_test_init_OBJECTS)
-test_init_LDADD = $(LDADD)
-test_init_DEPENDENCIES = ../libevent.la
+test_init_DEPENDENCIES = ../libevent_core.la
 am_test_time_OBJECTS = test-time.$(OBJEXT)
 test_time_OBJECTS = $(am_test_time_OBJECTS)
-test_time_LDADD = $(LDADD)
-test_time_DEPENDENCIES = ../libevent.la
+test_time_DEPENDENCIES = ../libevent_core.la
 am_test_weof_OBJECTS = test-weof.$(OBJEXT)
 test_weof_OBJECTS = $(am_test_weof_OBJECTS)
-test_weof_LDADD = $(LDADD)
-test_weof_DEPENDENCIES = ../libevent.la
+test_weof_DEPENDENCIES = ../libevent_core.la
 DEFAULT_INCLUDES = -I. -I$(top_builddir)@am__isrc@
 depcomp =
 am__depfiles_maybe =
@@ -100,7 +95,7 @@ CC = @CC@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
-CPPFLAGS = -I.. -I../compat
+CPPFLAGS = @CPPFLAGS@
 CXX = @CXX@
 CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
@@ -129,7 +124,6 @@ LIBTOOL = @LIBTOOL@
 LIBTOOL_DEPS = @LIBTOOL_DEPS@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
-MAINT = @MAINT@
 MAKEINFO = @MAKEINFO@
 MKDIR_P = @MKDIR_P@
 OBJEXT = @OBJEXT@
@@ -141,6 +135,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 RANLIB = @RANLIB@
+SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
@@ -197,25 +192,31 @@ target_alias = @target_alias@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign no-dependencies
-LDADD = ../libevent.la
-EXTRA_DIST = regress.rpc
+AM_CFLAGS = -I$(top_srcdir) -I$(top_srcdir)/compat
+EXTRA_DIST = regress.rpc regress.gen.h regress.gen.c
 BUILT_SOURCES = regress.gen.c regress.gen.h
 test_init_SOURCES = test-init.c
+test_init_LDADD = ../libevent_core.la
 test_eof_SOURCES = test-eof.c
+test_eof_LDADD = ../libevent_core.la
 test_weof_SOURCES = test-weof.c
+test_weof_LDADD = ../libevent_core.la
 test_time_SOURCES = test-time.c
+test_time_LDADD = ../libevent_core.la
 regress_SOURCES = regress.c regress.h regress_http.c regress_dns.c \
+	regress_rpc.c \
 	regress.gen.c regress.gen.h
 
+regress_LDADD = ../libevent.la
 bench_SOURCES = bench.c
+bench_LDADD = ../libevent.la
 DISTCLEANFILES = *~
-CLEANFILES = regress.gen.h regress.gen.c
 all: $(BUILT_SOURCES)
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
 .SUFFIXES: .c .lo .o .obj
-$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__configure_deps)
+$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -240,9 +241,9 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 
-$(top_srcdir)/configure: @MAINTAINER_MODE_TRUE@ $(am__configure_deps)
+$(top_srcdir)/configure:  $(am__configure_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
-$(ACLOCAL_M4): @MAINTAINER_MODE_TRUE@ $(am__aclocal_m4_deps)
+$(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 
 clean-noinstPROGRAMS:
@@ -388,7 +389,6 @@ install-strip:
 mostlyclean-generic:
 
 clean-generic:
-	-test -z "$(CLEANFILES)" || rm -f $(CLEANFILES)
 
 distclean-generic:
 	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
@@ -471,13 +471,13 @@ uninstall-am:
 	pdf pdf-am ps ps-am tags uninstall uninstall-am
 
 
-regress.gen.c regress.gen.h: regress.rpc
-	../event_rpcgen.py regress.rpc || echo "No Python installed"
+regress.gen.c regress.gen.h: regress.rpc $(top_srcdir)/event_rpcgen.py
+	$(top_srcdir)/event_rpcgen.py $(srcdir)/regress.rpc || echo "No Python installed"
 
 test: test-init test-eof test-weof test-time regress
 
 verify: test
-	@./test.sh
+	@$(srcdir)/test.sh
 
 bench test-init test-eof test-weof test-time: ../libevent.la
 # Tell versions [3.59,3.63) of GNU make to not export all variables.

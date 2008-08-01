@@ -36,7 +36,6 @@
 #include <sys/_time.h>
 #endif
 #include <sys/queue.h>
-#include <sys/tree.h>
 #include <sys/devpoll.h>
 #include <signal.h>
 #include <stdio.h>
@@ -70,21 +69,20 @@ struct devpollop {
 	int nchanges;
 };
 
-void *devpoll_init	(struct event_base *);
-int devpoll_add	(void *, struct event *);
-int devpoll_del	(void *, struct event *);
-int devpoll_recalc	(struct event_base *, void *, int);
-int devpoll_dispatch	(struct event_base *, void *, struct timeval *);
-void devpoll_dealloc	(struct event_base *, void *);
+static void *devpoll_init	(struct event_base *);
+static int devpoll_add	(void *, struct event *);
+static int devpoll_del	(void *, struct event *);
+static int devpoll_dispatch	(struct event_base *, void *, struct timeval *);
+static void devpoll_dealloc	(struct event_base *, void *);
 
 struct eventop devpollops = {
 	"devpoll",
 	devpoll_init,
 	devpoll_add,
 	devpoll_del,
-	devpoll_recalc,
 	devpoll_dispatch,
-	devpoll_dealloc
+	devpoll_dealloc,
+	1 /* need reinit */
 };
 
 #define NEVENT	32000
@@ -125,7 +123,7 @@ devpoll_queue(struct devpollop *devpollop, int fd, int events) {
 	return(0);
 }
 
-void *
+static void *
 devpoll_init(struct event_base *base)
 {
 	int dpfd, nfiles = NEVENT;
@@ -141,7 +139,7 @@ devpoll_init(struct event_base *base)
 
 	if (getrlimit(RLIMIT_NOFILE, &rl) == 0 &&
 	    rl.rlim_cur != RLIM_INFINITY)
-		nfiles = rl.rlim_cur - 1;
+		nfiles = rl.rlim_cur;
 
 	/* Initialize the kernel queue */
 	if ((dpfd = open("/dev/poll", O_RDWR)) == -1) {
@@ -184,17 +182,17 @@ devpoll_init(struct event_base *base)
 	return (devpollop);
 }
 
-int
+static int
 devpoll_recalc(struct event_base *base, void *arg, int max)
 {
 	struct devpollop *devpollop = arg;
 
-	if (max > devpollop->nfds) {
+	if (max >= devpollop->nfds) {
 		struct evdevpoll *fds;
 		int nfds;
 
 		nfds = devpollop->nfds;
-		while (nfds < max)
+		while (nfds <= max)
 			nfds <<= 1;
 
 		fds = realloc(devpollop->fds, nfds * sizeof(struct evdevpoll));
@@ -211,7 +209,7 @@ devpoll_recalc(struct event_base *base, void *arg, int max)
 	return (0);
 }
 
-int
+static int
 devpoll_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 {
 	struct devpollop *devpollop = arg;
@@ -288,7 +286,7 @@ devpoll_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 }
 
 
-int
+static int
 devpoll_add(void *arg, struct event *ev)
 {
 	struct devpollop *devpollop = arg;
@@ -342,7 +340,7 @@ devpoll_add(void *arg, struct event *ev)
 	return (0);
 }
 
-int
+static int
 devpoll_del(void *arg, struct event *ev)
 {
 	struct devpollop *devpollop = arg;
@@ -399,7 +397,7 @@ devpoll_del(void *arg, struct event *ev)
 	return (0);
 }
 
-void
+static void
 devpoll_dealloc(struct event_base *base, void *arg)
 {
 	struct devpollop *devpollop = arg;

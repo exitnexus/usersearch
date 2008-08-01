@@ -44,21 +44,24 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 #ifdef HAVE_INTTYPES_H
 #include <inttypes.h>
 #endif
 
 /* Some platforms apparently define the udata field of struct kevent as
- * ntptr_t, whereas others define it as void*.  There doesn't seem to be an
+ * intptr_t, whereas others define it as void*.  There doesn't seem to be an
  * easy way to tell them apart via autoconf, so we need to use OS macros. */
 #if defined(HAVE_INTTYPES_H) && !defined(__OpenBSD__) && !defined(__FreeBSD__) && !defined(__darwin__) && !defined(__APPLE__)
-#define PTR_TO_UDATA(x) ((intptr_t)(x))
+#define PTR_TO_UDATA(x)	((intptr_t)(x))
 #else
-#define PTR_TO_UDATA(x) (x)
+#define PTR_TO_UDATA(x)	(x)
 #endif
 
 #include "event.h"
+#include "event-internal.h"
 #include "log.h"
+#include "event-internal.h"
 
 #define EVLIST_X_KQINKERNEL	0x1000
 
@@ -68,32 +71,33 @@ struct kqop {
 	struct kevent *changes;
 	int nchanges;
 	struct kevent *events;
+	struct event_list evsigevents[NSIG];
 	int nevents;
 	int kq;
+	pid_t pid;
 };
 
-void *kq_init	(struct event_base *);
-int kq_add	(void *, struct event *);
-int kq_del	(void *, struct event *);
-int kq_recalc	(struct event_base *, void *, int);
-int kq_dispatch	(struct event_base *, void *, struct timeval *);
-int kq_insert	(struct kqop *, struct kevent *);
-void kq_dealloc (struct event_base *, void *);
+static void *kq_init	(struct event_base *);
+static int kq_add	(void *, struct event *);
+static int kq_del	(void *, struct event *);
+static int kq_dispatch	(struct event_base *, void *, struct timeval *);
+static int kq_insert	(struct kqop *, struct kevent *);
+static void kq_dealloc (struct event_base *, void *);
 
 const struct eventop kqops = {
 	"kqueue",
 	kq_init,
 	kq_add,
 	kq_del,
-	kq_recalc,
 	kq_dispatch,
-	kq_dealloc
+	kq_dealloc,
+	1 /* need reinit */
 };
 
-void *
+static void *
 kq_init(struct event_base *base)
 {
-	int kq;
+	int i, kq;
 	struct kqop *kqueueop;
 
 	/* Disable kqueue when this environment variable is set */
@@ -113,6 +117,8 @@ kq_init(struct event_base *base)
 
 	kqueueop->kq = kq;
 
+	kqueueop->pid = getpid();
+
 	/* Initalize fields */
 	kqueueop->changes = malloc(NEVENT * sizeof(struct kevent));
 	if (kqueueop->changes == NULL) {
@@ -126,6 +132,11 @@ kq_init(struct event_base *base)
 		return (NULL);
 	}
 	kqueueop->nevents = NEVENT;
+
+	/* we need to keep track of multiple events per signal */
+	for (i = 0; i < NSIG; ++i) {
+		TAILQ_INIT(&kqueueop->evsigevents[i]);
+	}
 
 	/* Check for Mac OS X kqueue bug. */
 	kqueueop->changes[0].ident = -1;
@@ -151,13 +162,7 @@ kq_init(struct event_base *base)
 	return (kqueueop);
 }
 
-int
-kq_recalc(struct event_base *base, void *arg, int max)
-{
-	return (0);
-}
-
-int
+static int
 kq_insert(struct kqop *kqop, struct kevent *kev)
 {
 	int nevents = kqop->nevents;
@@ -195,9 +200,9 @@ kq_insert(struct kqop *kqop, struct kevent *kev)
 	memcpy(&kqop->changes[kqop->nchanges++], kev, sizeof(struct kevent));
 
 	event_debug(("%s: fd %d %s%s",
-		 __func__, kev->ident, 
-		 kev->filter == EVFILT_READ ? "EVFILT_READ" : "EVFILT_WRITE",
-		 kev->flags == EV_DELETE ? " (del)" : ""));
+		__func__, (int)kev->ident, 
+		kev->filter == EVFILT_READ ? "EVFILT_READ" : "EVFILT_WRITE",
+		kev->flags == EV_DELETE ? " (del)" : ""));
 
 	return (0);
 }
@@ -208,7 +213,7 @@ kq_sighandler(int sig)
 	/* Do nothing here */
 }
 
-int
+static int
 kq_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 {
 	struct kqop *kqop = arg;
@@ -261,8 +266,6 @@ kq_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 			return (-1);
 		}
 
-		ev = (struct event *)events[i].udata;
-
 		if (events[i].filter == EVFILT_READ) {
 			which |= EV_READ;
 		} else if (events[i].filter == EVFILT_WRITE) {
@@ -274,18 +277,27 @@ kq_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 		if (!which)
 			continue;
 
-		if (!(ev->ev_events & EV_PERSIST))
-			event_del(ev);
+		if (events[i].filter == EVFILT_SIGNAL) {
+			struct event_list *head =
+			    (struct event_list *)events[i].udata;
+			TAILQ_FOREACH(ev, head, ev_signal_next) {
+				event_active(ev, which, events[i].data);
+			}
+		} else {
+			ev = (struct event *)events[i].udata;
 
-		event_active(ev, which,
-		    ev->ev_events & EV_SIGNAL ? events[i].data : 1);
+			if (!(ev->ev_events & EV_PERSIST))
+				ev->ev_flags &= ~EVLIST_X_KQINKERNEL;
+
+			event_active(ev, which, 1);
+		}
 	}
 
 	return (0);
 }
 
 
-int
+static int
 kq_add(void *arg, struct event *ev)
 {
 	struct kqop *kqop = arg;
@@ -294,20 +306,29 @@ kq_add(void *arg, struct event *ev)
 	if (ev->ev_events & EV_SIGNAL) {
 		int nsignal = EVENT_SIGNAL(ev);
 
- 		memset(&kev, 0, sizeof(kev));
-		kev.ident = nsignal;
-		kev.filter = EVFILT_SIGNAL;
-		kev.flags = EV_ADD;
-		if (!(ev->ev_events & EV_PERSIST))
-			kev.flags |= EV_ONESHOT;
-		kev.udata = PTR_TO_UDATA(ev);
-		
-		if (kq_insert(kqop, &kev) == -1)
-			return (-1);
+		assert(nsignal >= 0 && nsignal < NSIG);
+		if (TAILQ_EMPTY(&kqop->evsigevents[nsignal])) {
+			struct timespec timeout = { 0, 0 };
+			
+			memset(&kev, 0, sizeof(kev));
+			kev.ident = nsignal;
+			kev.filter = EVFILT_SIGNAL;
+			kev.flags = EV_ADD;
+			kev.udata = PTR_TO_UDATA(&kqop->evsigevents[nsignal]);
+			
+			/* Be ready for the signal if it is sent any
+			 * time between now and the next call to
+			 * kq_dispatch. */
+			if (kevent(kqop->kq, &kev, 1, NULL, 0, &timeout) == -1)
+				return (-1);
+			
+			if (_evsignal_set_handler(ev->ev_base, nsignal,
+				kq_sighandler) == -1)
+				return (-1);
+		}
 
-		if (signal(nsignal, kq_sighandler) == SIG_ERR)
-			return (-1);
-
+		TAILQ_INSERT_TAIL(&kqop->evsigevents[nsignal], ev,
+		    ev_signal_next);
 		ev->ev_flags |= EVLIST_X_KQINKERNEL;
 		return (0);
 	}
@@ -349,7 +370,7 @@ kq_add(void *arg, struct event *ev)
 	return (0);
 }
 
-int
+static int
 kq_del(void *arg, struct event *ev)
 {
 	struct kqop *kqop = arg;
@@ -360,17 +381,26 @@ kq_del(void *arg, struct event *ev)
 
 	if (ev->ev_events & EV_SIGNAL) {
 		int nsignal = EVENT_SIGNAL(ev);
+		struct timespec timeout = { 0, 0 };
 
- 		memset(&kev, 0, sizeof(kev));
-		kev.ident = nsignal;
-		kev.filter = EVFILT_SIGNAL;
-		kev.flags = EV_DELETE;
+		assert(nsignal >= 0 && nsignal < NSIG);
+		TAILQ_REMOVE(&kqop->evsigevents[nsignal], ev, ev_signal_next);
+		if (TAILQ_EMPTY(&kqop->evsigevents[nsignal])) {
+			memset(&kev, 0, sizeof(kev));
+			kev.ident = nsignal;
+			kev.filter = EVFILT_SIGNAL;
+			kev.flags = EV_DELETE;
 		
-		if (kq_insert(kqop, &kev) == -1)
-			return (-1);
+			/* Because we insert signal events
+			 * immediately, we need to delete them
+			 * immediately, too */
+			if (kevent(kqop->kq, &kev, 1, NULL, 0, &timeout) == -1)
+				return (-1);
 
-		if (signal(nsignal, SIG_DFL) == SIG_ERR)
-			return (-1);
+			if (_evsignal_restore_handler(ev->ev_base,
+				nsignal) == -1)
+				return (-1);
+		}
 
 		ev->ev_flags &= ~EVLIST_X_KQINKERNEL;
 		return (0);
@@ -403,7 +433,7 @@ kq_del(void *arg, struct event *ev)
 	return (0);
 }
 
-void
+static void
 kq_dealloc(struct event_base *base, void *arg)
 {
 	struct kqop *kqop = arg;
@@ -412,7 +442,7 @@ kq_dealloc(struct event_base *base, void *arg)
 		free(kqop->changes);
 	if (kqop->events)
 		free(kqop->events);
-	if (kqop->kq)
+	if (kqop->kq >= 0 && kqop->pid == getpid())
 		close(kqop->kq);
 	memset(kqop, 0, sizeof(struct kqop));
 	free(kqop);

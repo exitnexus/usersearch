@@ -29,6 +29,11 @@
 #include "config.h"
 #endif
 
+#ifdef WIN32
+#include <winsock2.h>
+#include <windows.h>
+#endif
+
 #ifdef HAVE_VASPRINTF
 /* If we have vasprintf, we need to define this before we include stdio.h. */
 #define _GNU_SOURCE
@@ -57,6 +62,8 @@
 #endif
 
 #include "event.h"
+#include "config.h"
+#include "evutil.h"
 
 struct evbuffer *
 evbuffer_new(void)
@@ -148,12 +155,7 @@ evbuffer_add_vprintf(struct evbuffer *buf, const char *fmt, va_list ap)
 #endif
 		va_copy(aq, ap);
 
-#ifdef WIN32
-		sz = vsnprintf(buffer, space - 1, fmt, aq);
-		buffer[space - 1] = '\0';
-#else
-		sz = vsnprintf(buffer, space, fmt, aq);
-#endif
+		sz = evutil_vsnprintf(buffer, space, fmt, aq);
 
 		va_end(aq);
 
@@ -351,12 +353,14 @@ evbuffer_read(struct evbuffer *buf, int fd, int howmuch)
 	u_char *p;
 	size_t oldoff = buf->off;
 	int n = EVBUFFER_MAX_READ;
-#ifdef WIN32
-	DWORD dwBytesRead;
-#endif
 
-#ifdef FIONREAD
+#if defined(FIONREAD)
+#ifdef WIN32
+	long lng = n;
+	if (ioctlsocket(fd, FIONREAD, &lng) == -1 || (n=lng) == 0) {
+#else
 	if (ioctl(fd, FIONREAD, &n) == -1 || n == 0) {
+#endif
 		n = EVBUFFER_MAX_READ;
 	} else if (n > EVBUFFER_MAX_READ && n > howmuch) {
 		/*
@@ -384,18 +388,13 @@ evbuffer_read(struct evbuffer *buf, int fd, int howmuch)
 
 #ifndef WIN32
 	n = read(fd, p, howmuch);
+#else
+	n = recv(fd, p, howmuch, 0);
+#endif
 	if (n == -1)
 		return (-1);
 	if (n == 0)
 		return (0);
-#else
-	n = ReadFile((HANDLE)fd, p, howmuch, &dwBytesRead, NULL);
-	if (n == 0)
-		return (-1);
-	if (dwBytesRead == 0)
-		return (0);
-	n = dwBytesRead;
-#endif
 
 	buf->off += n;
 
@@ -410,24 +409,16 @@ int
 evbuffer_write(struct evbuffer *buffer, int fd)
 {
 	int n;
-#ifdef WIN32
-	DWORD dwBytesWritten;
-#endif
 
 #ifndef WIN32
 	n = write(fd, buffer->buffer, buffer->off);
+#else
+	n = send(fd, buffer->buffer, buffer->off, 0);
+#endif
 	if (n == -1)
 		return (-1);
 	if (n == 0)
 		return (0);
-#else
-	n = WriteFile((HANDLE)fd, buffer->buffer, buffer->off, &dwBytesWritten, NULL);
-	if (n == 0)
-		return (-1);
-	if (dwBytesWritten == 0)
-		return (0);
-	n = dwBytesWritten;
-#endif
 	evbuffer_drain(buffer, n);
 
 	return (n);
