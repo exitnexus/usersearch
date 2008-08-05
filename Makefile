@@ -6,10 +6,11 @@
 # Local Settings
 ###
 CC			= g++
-CFLAGS		= -Wall -fno-strict-aliasing -I/usr/local/include -L/usr/local/lib -Ilibevent -Ilibevent/compat
+CFLAGS		= -Wall -fno-strict-aliasing -I/usr/local/include -L/usr/local/lib -Ilibevent -Ilibevent/compat -ansi
 
 DAEMON		= usersearch
-DAEMON_O	= search.o
+
+DAEMON_O	= search.o usersearch.o
 DAEMON_INC  = \
 	libevent/.libs/buffer.o \
 	libevent/.libs/evbuffer.o \
@@ -27,9 +28,10 @@ DAEMON_INC  = \
 DAEMON_L	= -lpthread
 
 DATE		= `date +%Y-%m-%d-%H-%M`
+UNAME       = `uname`
 
 ifdef DEBUG
-	CFLAGS		+= -DUSE_DEBUG -g3 
+	CFLAGS		+= -DUSE_DEBUG -O0 -g3 
 else
 	CFLAGS		+= -O3
 endif
@@ -45,11 +47,17 @@ libevent/% :
 	cd libevent; CFLAGS=$(CFLAGS) ./configure; make
 	echo "Done libevent --------------------------------------------------------"
 
+search.o : iterpair.h search.h usersetbase.h
+	$(CC) -c $(CFLAGS) search.c -o search.o
+
+usersearch.o : iterpair.h search.h tqueue.h
+	$(CC) -c $(CFLAGS) usersearch.c -o usersearch.o
+
 %.o : %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(DAEMON): $(DAEMON_INC) $(DAEMON_O) $(DAEMON).c
-	$(CC) $(LDFLAGS) $(CFLAGS) $(DAEMON_L) $(DAEMON_O) $(DAEMON_INC) $(DAEMON).c -o $(DAEMON)
+$(DAEMON): $(DAEMON_INC) $(DAEMON_O)
+	$(CC) $(LDFLAGS) $(CFLAGS) $(DAEMON_L) $(DAEMON_O) $(DAEMON_INC) -o $(DAEMON)
 
 pristine: clean
 	cd libevent; make clean
