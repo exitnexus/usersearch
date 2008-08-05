@@ -571,16 +571,37 @@ int main(int argc, char **argv){
 				"\t-t            Number of threads [%s]\n\n",
 				data_source_def, port_def, hostname_def, threads_def);
 			exit(255);
-		}else if (strcmp(ptr, "-p") == 0)
+		} else if (strcmp(ptr, "-p") == 0) {
 			port_arg = ptr = argv[++i];
-		else if (strcmp(ptr, "-h") == 0)
+			if (port_arg == NULL) {
+				printf("Please specify port number\n");
+				exit(1);
+			}
+		} else if (strcmp(ptr, "-h") == 0) {
 			hostname_arg = ptr = argv[++i];
-		else if (strcmp(ptr, "-t") == 0)
+			if (hostname_arg == NULL) {
+				printf("Please specify hostname\n");
+				exit(1);
+			}
+		} else if (strcmp(ptr, "-t") == 0) {
 			threads_arg = ptr = argv[++i];
-		else if (strcmp(ptr, "-b") == 0)
+			if (threads_arg == NULL) {
+				printf("Please specify number of threads\n");
+				exit(1);
+			}
+		} else if (strcmp(ptr, "-b") == 0) {
 			bench_arg = ptr = argv[++i];
-		else if (strcmp(ptr, "-l") == 0)
+			if (bench_arg == NULL) {
+				printf("Please specify number of random searches for benchmark\n");
+				exit(1);
+			}
+		} else if (strcmp(ptr, "-l") == 0) {
 			data_source = ptr = argv[++i];
+			if (hostname_arg == NULL) {
+				printf("Please specify data location\n");
+				exit(1);
+			}
+		}
 	}
 
 
