@@ -5,6 +5,9 @@
 ###
 # Local Settings
 ###
+DATE		= `date +%Y-%m-%d-%H-%M`
+UNAME       = $(shell uname)
+
 CC			= g++
 CFLAGS		= -Wall -fno-strict-aliasing -I/usr/local/include -L/usr/local/lib -Ilibevent -Ilibevent/compat -ansi
 
@@ -18,17 +21,23 @@ DAEMON_INC  = \
 	libevent/.libs/event_tagging.o \
 	libevent/.libs/evutil.o \
 	libevent/.libs/http.o \
-	libevent/.libs/kqueue.o \
 	libevent/.libs/log.o \
 	libevent/.libs/poll.o \
 	libevent/.libs/select.o \
 	libevent/.libs/signal.o \
 	libevent/.libs/strlcpy.o
+	
+ifeq ($(UNAME),Darwin)
+	DAEMON_INC += libevent/.libs/kqueue.o
+else
+	DAEMON_INC += libevent/.libs/epoll.o
+endif
 
-DAEMON_L	= -lpthread
-
-DATE		= `date +%Y-%m-%d-%H-%M`
-UNAME       = `uname`
+ifeq ($(UNAME),Darwin)
+	DAEMON_L	= -lpthread
+else
+	DAEMON_L	= -lpthread -lrt
+endif
 
 ifdef DEBUG
 	CFLAGS		+= -DUSE_DEBUG -O0 -g3 
