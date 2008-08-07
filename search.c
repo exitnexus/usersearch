@@ -304,6 +304,7 @@ bool search_data::loaddata(char * load_loc){
 	loadlocations();
 	loadusers();
 	loadinterests();
+	// No need to call loadactive, that's pulled in initially from loadusers
 
 	return true;
 }
@@ -377,19 +378,33 @@ FILE * search_data::getfd(char * filename){
 	return input;
 }
 
+char * search_data::getHeader(char * buf, const size_t size, FILE * fp) const {
+	if ((buf == NULL) || (size <= 0) || (fp == NULL))
+		return NULL;
+	
+	if (fgets(buf, size, fp) == NULL)
+		return NULL;
+	// Now check to see if we got an annoying blank line at the top.
+	// If so, reread.
+	if ( ((buf[0] == '\r') && (buf[1] == '\n') && (buf[2] == '\0')) ||
+	     ((buf[0] == '\n') && (buf[1] == '\0')) ) {
+		if (fgets(buf, size, fp) == NULL) {
+			return NULL;
+		}
+	}
+}
 
 void search_data::loadlocations(){
 	char buf[256];
 	unsigned int ibuf[2];
-	uint32_t i = 0;
+	uint32_t i = 1;
 
 	FILE * input = getfd("locations");
 
 //interest definitions
-	fgets(buf, sizeof(buf), input); //first line is the signature
-	i++;
-
-	if(strcmp(buf, "id,parent\n") != 0){
+	// first line is the signature
+	if ( (getHeader(buf, sizeof(buf), input) == NULL) ||
+	     (strcmp(buf, "id,parent\n") != 0) ) {
 		printf("Location file signature doesn't match\n");
 		exit(1);
 	}
@@ -420,10 +435,11 @@ void search_data::loadusers(){
 
 	FILE * input = getfd("users");
 
-	fgets(buf, sizeof(buf), input); //ignore the first line
-
-	if(strcmp(buf, "userid,age,sex,loc,active,pic,single,sexuality\n") != 0){
-		printf("Users file signature doesn't match\n");
+	// first line is the signature
+	if ( (getHeader(buf, sizeof(buf), input) == NULL) ||
+	     (strcmp(buf, "userid,age,sex,loc,active,pic,single,sexuality\n") != 0)
+	   ) {
+		printf("Location file signature doesn't match\n");
 		exit(1);
 	}
 
@@ -452,7 +468,7 @@ void search_data::loadusers(){
 void search_data::loadinterests(){
 	char buf[256];
 	unsigned int ibuf[2];
-	uint32_t i = 0;
+	uint32_t i = 1;
 
 	userid_t userid;
 	uint32_t interestid;
@@ -460,11 +476,10 @@ void search_data::loadinterests(){
 	FILE * input = getfd("interests");
 
 //interest definitions
-	fgets(buf, sizeof(buf), input); //first line is the signature
-	i++;
-
-	if(strcmp(buf, "userid,interestid\n") != 0){
-		printf("Interest file signature doesn't match\n");
+	// first line is the signature
+	if ( (getHeader(buf, sizeof(buf), input) == NULL) ||
+	     (strcmp(buf, "userid,interestid\n") != 0) ) {
+		printf("Location file signature doesn't match\n");
 		exit(1);
 	}
 

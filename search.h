@@ -219,6 +219,14 @@ private:
 
 	inline char matchUser(const user_t & user, const search_t & srch);
 	FILE * getfd(char * filename);
+	
+	/// Get header part of data.
+	/// \arg buf (output) Store in this buffer.
+	/// \arg size Size of buffer.
+	/// \arg fp File pointer to read from
+	/// \return On success, a pointer to string.  Otherwise, return NULL.
+	/// Unlike fgets, the buffer may have been changed.
+	char *getHeader(char * buf, const size_t size, FILE * fp) const;
 };
 
 
