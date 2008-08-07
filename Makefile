@@ -56,10 +56,10 @@ libevent/% :
 	cd libevent; CFLAGS=$(CFLAGS) ./configure; make
 	echo "Done libevent --------------------------------------------------------"
 
-search.o : iterpair.h search.h usersetbase.h
+search.o : iterpair.h search.h usersetbase.h search.c
 	$(CC) -c $(CFLAGS) search.c -o search.o
 
-usersearch.o : iterpair.h search.h tqueue.h
+usersearch.o : iterpair.h search.h tqueue.h usersearch.c
 	$(CC) -c $(CFLAGS) usersearch.c -o usersearch.o
 
 %.o : %.c
