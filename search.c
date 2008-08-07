@@ -392,6 +392,7 @@ char * search_data::getHeader(char * buf, const size_t size, FILE * fp) const {
 			return NULL;
 		}
 	}
+	return buf;
 }
 
 void search_data::loadlocations(){
