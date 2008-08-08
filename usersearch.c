@@ -72,7 +72,7 @@ void * searchRunner(thread_data_t * threaddata){
 
 		if(srch){
 			global->data->searchUsers(srch);
-	
+
 			global->response->push(srch);
 			signalfd(global->pushfd);
 		}
@@ -130,7 +130,7 @@ void handle_queue_searchresponse(int fd, short event, void *arg){
 
 		evbuffer_add_printf(evb, "totalrows: %u\n", srch->totalrows);
 		evbuffer_add_printf(evb, "returnedrows: %zu\n", srch->results.size());
-		evbuffer_add_printf(evb, "userids: %zu", srch->results.size());
+		evbuffer_add_printf(evb, "userids: ");
 		for(i = 0; i < srch->results.size(); i++)
 			evbuffer_add_printf(evb, "%u,", srch->results[i]);
 		evbuffer_add_printf(evb, "\n");
@@ -178,7 +178,7 @@ void handle_request_search(struct evhttp_request *req, void *arg){
 	srch->agemin = 14;
 	srch->agemax = 60;
 	srch->sex = 2;
-	srch->active = 2;
+	srch->active = 0;
 	srch->pic = 1;
 	srch->single = 0;
 	srch->sexuality = 0;
