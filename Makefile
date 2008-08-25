@@ -9,7 +9,7 @@ DATE		= `date +%Y-%m-%d-%H-%M`
 UNAME       = $(shell uname)
 
 CC			= g++
-CFLAGS		= -Wall -fno-strict-aliasing -I/usr/local/include -L/usr/local/lib -Ilibevent -Ilibevent/compat -ansi
+CFLAGS		= -Wall -fno-strict-aliasing -I/usr/local/include -L/usr/local/lib -Ilibevent -Ilibevent/compat
 
 DAEMON		= usersearch
 
