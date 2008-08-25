@@ -218,7 +218,7 @@ private:
 	void unsetLoc(userid_t userid, uint32_t loc);
 
 	inline char matchUser(const user_t & user, const search_t & srch);
-	FILE * getfd(char * filename);
+	FILE * getfd(const char * filename);
 	
 	/// Get header part of data.
 	/// \arg buf (output) Store in this buffer.

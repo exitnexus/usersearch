@@ -309,7 +309,7 @@ bool search_data::loaddata(char * load_loc){
 	return true;
 }
 
-FILE * search_data::getfd(char * filename){
+FILE * search_data::getfd(const char * filename){
 	FILE * input;
 	
 	char * path = (char *)malloc(strlen(datasource) + strlen(filename));
