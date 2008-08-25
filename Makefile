@@ -53,7 +53,7 @@ all : $(DAEMON)
 
 libevent/% : 
 	echo "Compiling libevent ---------------------------------------------------"
-	cd libevent; CFLAGS=$(CFLAGS) ./configure; make
+	cd libevent; CFLAGS="$(CFLAGS)" ./configure; make
 	echo "Done libevent --------------------------------------------------------"
 
 search.o : iterpair.h search.h usersetbase.h search.c
