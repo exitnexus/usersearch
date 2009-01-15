@@ -11,9 +11,9 @@
 
 #include "search.h"
 #include "tqueue.h"
-#include "libevent/compat/sys/queue.h"
-#include "libevent/event.h"
-#include "libevent/evhttp.h"
+#include <sys/queue.h>
+#include <event.h>
+#include <evhttp.h>
 
 
 
